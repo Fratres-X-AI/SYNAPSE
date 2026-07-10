@@ -85,7 +85,10 @@ For a smoke-test Windows executable, install dev dependencies and run the checke
 ```powershell
 pip install -r requirements-dev.txt
 .\build.ps1
+.\scripts\verify_release.ps1
 ```
+
+Pilot install instructions for non-developers are in `docs/windows_install.md`.
 
 Verify the build with `docs/release_checklist.md` before sharing it with pilot users.
 

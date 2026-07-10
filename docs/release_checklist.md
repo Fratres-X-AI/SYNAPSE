@@ -12,7 +12,10 @@ Use this checklist before sharing a build with pilot users. Do not start billing
 
 ```powershell
 .\build.ps1
+.\scripts\verify_release.ps1
 ```
+
+- [ ] Confirm `docs/windows_install.md` matches the shipped executable behavior.
 
 - [ ] Launch the built executable from `dist`.
 - [ ] Confirm missing optional tray dependencies produce a clear message if tray support is unavailable.

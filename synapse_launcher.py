@@ -22,7 +22,42 @@ SCRIPTS = {
     "fusion": "synapse_fusion.py",
     "pilot-summary": "synapse_pilot_summary.py",
 }
+SCRIPT_MODULES = {
+    "synapse_onboard.py": "test_onboard",
+    "synapse_monitor.py": "test_monitor",
+    "replay_monitor.py": "replay_monitor",
+    "synapse_fusion.py": "test_fusion_track",
+    "synapse_pilot_summary.py": "synapse_pilot_summary",
+}
 UTILITY_COMMANDS = {"first-run", "privacy", "data", "delete-data", "settings"}
+
+
+def is_frozen() -> bool:
+    return getattr(sys, "frozen", False)
+
+
+def run_frozen_module(module_name: str, argv0: str, extra_args: list[str]) -> int:
+    import importlib
+
+    module = importlib.import_module(module_name)
+    if not hasattr(module, "main"):
+        print(f"Error: {module_name} has no main()", file=sys.stderr)
+        return 1
+
+    previous_argv = sys.argv
+    sys.argv = [argv0, *extra_args]
+    try:
+        result = module.main()
+        if isinstance(result, int):
+            return result
+        return 0
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        return int(code) if isinstance(code, int) else 1
+    finally:
+        sys.argv = previous_argv
 
 DESCRIPTION = """\
 Synapse cognitive monitoring launcher.
@@ -51,13 +86,22 @@ Examples:
 
 
 def run_script(script_name: str, extra_args: list[str] | None = None) -> int:
+    argv = extra_args or []
+    if is_frozen():
+        module_name = SCRIPT_MODULES.get(script_name)
+        if module_name is None:
+            print(f"Error: no frozen handler for {script_name}", file=sys.stderr)
+            return 1
+        print(f"Running: Synapse {script_name}")
+        return run_frozen_module(module_name, script_name, argv)
+
     script_path = ROOT / script_name
     if not script_path.exists():
         script_path = RESOURCE_ROOT / script_name
     if not script_path.exists():
         print(f"Error: {script_path} not found", file=sys.stderr)
         return 1
-    cmd = [sys.executable, str(script_path), *(extra_args or [])]
+    cmd = [sys.executable, str(script_path), *argv]
     print(f"Running: {' '.join(cmd)}")
     return subprocess.call(cmd, cwd=ROOT)
 

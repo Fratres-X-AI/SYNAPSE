@@ -4,39 +4,27 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "Synapse build — PyInstaller one-file" -ForegroundColor Cyan
+Write-Host "Synapse build - PyInstaller one-file" -ForegroundColor Cyan
 
-if (-not (Get-Command pyinstaller -ErrorAction SilentlyContinue)) {
+$python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $python)) {
+    $python = "python"
+}
+
+$pyinstaller = & $python -m PyInstaller --version 2>$null
+if (-not $pyinstaller) {
     Write-Host "PyInstaller not found. Install dev requirements first:" -ForegroundColor Yellow
-    Write-Host "  pip install -r requirements-dev.txt"
+    Write-Host "  $python -m pip install -r requirements-dev.txt"
     exit 1
 }
 
 $distDir = Join-Path $PSScriptRoot "dist"
 $buildDir = Join-Path $PSScriptRoot "build"
-$specDir = Join-Path $PSScriptRoot "*.spec"
 
 if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
-Get-ChildItem $specDir -ErrorAction SilentlyContinue | Remove-Item -Force
 
-pyinstaller `
-    --onefile `
-    --name Synapse `
-    --console `
-    --clean `
-    --collect-all mediapipe `
-    --hidden-import cv2 `
-    --hidden-import numpy `
-    --hidden-import PIL `
-    --hidden-import pystray `
-    --add-data "src;src" `
-    --add-data "utils;utils" `
-    --add-data "synapse_onboard.py;." `
-    --add-data "synapse_monitor.py;." `
-    --add-data "synapse_fusion.py;." `
-    --add-data "synapse_pilot_summary.py;." `
-    synapse_launcher.py
+& $python -m PyInstaller --clean Synapse.spec
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed." -ForegroundColor Red
@@ -47,6 +35,10 @@ $exe = Join-Path $distDir "Synapse.exe"
 Write-Host ""
 Write-Host "Build complete: $exe" -ForegroundColor Green
 Write-Host ""
+Write-Host "Next steps:"
+Write-Host "  .\scripts\verify_release.ps1"
+Write-Host "  .\dist\Synapse.exe first-run"
+Write-Host ""
 Write-Host "Usage:"
 Write-Host "  .\dist\Synapse.exe first-run"
 Write-Host "  .\dist\Synapse.exe onboard"
@@ -55,4 +47,4 @@ Write-Host "  .\dist\Synapse.exe replay"
 Write-Host "  .\dist\Synapse.exe fusion"
 Write-Host "  .\dist\Synapse.exe data"
 Write-Host "  .\dist\Synapse.exe pilot-summary"
-Write-Host "  .\dist\Synapse.exe --tray"
+Write-Host '  .\dist\Synapse.exe --tray'

@@ -3,7 +3,10 @@ __pycache__/
 .venv/
 venv/
 .env
+dist/
+build/
 calibration.json
 emotion_profile.json
 sessions/
 *.summary.txt
+Synapse_Report_*.txt
