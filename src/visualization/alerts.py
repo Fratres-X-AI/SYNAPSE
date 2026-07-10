@@ -20,8 +20,9 @@ STATE_ALERT_COLORS = {
 
 
 class StateAlertTracker:
-    def __init__(self, beep: bool = True) -> None:
+    def __init__(self, beep: bool = True, quiet: bool = False) -> None:
         self.beep = beep
+        self.quiet = quiet
         self.previous_state: State | None = None
         self.flash_frames = 0
         self.alert_message = ""
@@ -36,7 +37,8 @@ class StateAlertTracker:
             self.alert_message = self._message(state, autonomy)
             if self.beep:
                 self._play_beep(state)
-            print(f"\nALERT: {self.alert_message}")
+            if not self.quiet:
+                print(f"\nALERT: {self.alert_message}")
 
         if state is not None:
             self.previous_state = state

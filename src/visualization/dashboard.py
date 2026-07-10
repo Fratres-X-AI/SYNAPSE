@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 
 from src.cognition.cognitive_state import CognitiveState, State
+from src.cognition.fusion_state import FusionState
+from src.cognition.profile_matcher import phase_display_label
 from src.perception.state_estimator import StateEstimator
 
 STATE_COLORS = {
@@ -205,4 +207,120 @@ def render_dashboard(
 
         draw_alert_banner(frame, alert_message, cognitive_state.state)
 
+    return frame
+
+
+def draw_soft_score_bars(frame, fusion: FusionState, origin: tuple[int, int]):
+    x, y = origin
+    width = 210
+    labels = (
+        ("Engagement", fusion.soft.engagement, (80, 220, 100)),
+        ("Fatigue", fusion.soft.fatigue, (0, 140, 255)),
+        ("Tension", fusion.soft.tension, (60, 60, 255)),
+        ("Positivity", fusion.soft.positivity, (0, 220, 0)),
+    )
+
+    for index, (label, value, color) in enumerate(labels):
+        row_y = y + index * 34
+        cv2.rectangle(frame, (x, row_y), (x + width, row_y + 24), (20, 20, 20), -1)
+        cv2.putText(frame, label, (x + 8, row_y + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1)
+        bar_x = x + 100
+        cv2.rectangle(frame, (bar_x, row_y + 6), (x + width - 8, row_y + 18), (50, 50, 50), -1)
+        fill = int((width - 116) * value)
+        if fill > 0:
+            cv2.rectangle(frame, (bar_x, row_y + 6), (bar_x + fill, row_y + 18), color, -1)
+        cv2.putText(
+            frame,
+            f"{value:.0%}",
+            (x + width - 42, row_y + 17),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (240, 240, 240),
+            1,
+        )
+    return frame
+
+
+def draw_profile_match_bars(frame, fusion: FusionState, origin: tuple[int, int]):
+    x, y = origin
+    width = 150
+    colors = {
+        "neutral": (200, 200, 200),
+        "happy": (0, 220, 0),
+        "sad": (255, 120, 0),
+        "mad": (0, 0, 255),
+    }
+    cv2.putText(frame, "PROFILE MATCH", (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (220, 220, 220), 1)
+    scores = fusion.profile_scores or {}
+    if not scores:
+        cv2.putText(frame, "Press N/H/S/M", (x, y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 140), 1)
+        return frame
+
+    display_phases = (
+        ("neutral", "N"),
+        ("happy", "H"),
+        ("sad", "S/S"),
+        ("mad", "M"),
+    )
+    for index, (phase, label) in enumerate(display_phases):
+        value = scores.get(phase, 0.0)
+        row_y = y + index * 26
+        color = colors[phase]
+        cv2.putText(frame, label, (x, row_y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
+        bar_x = x + 18
+        cv2.rectangle(frame, (bar_x, row_y + 4), (x + width, row_y + 18), (50, 50, 50), -1)
+        fill = int((width - 22) * value)
+        if fill > 0:
+            cv2.rectangle(frame, (bar_x, row_y + 4), (bar_x + fill, row_y + 18), color, -1)
+    return frame
+
+
+def render_fusion_dashboard(
+    frame,
+    fusion: FusionState | None,
+    ear_history: deque[float],
+    estimator: StateEstimator,
+    flash: bool = False,
+    alert_message: str = "",
+):
+    if fusion is None:
+        draw_state_border(frame, None)
+        cv2.putText(frame, "Waiting for face...", (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 2)
+        return frame
+
+    frame = render_dashboard(
+        frame,
+        fusion.cognitive,
+        ear_history,
+        estimator,
+        flash=flash,
+        alert_message=alert_message,
+    )
+
+    height, width = frame.shape[:2]
+    display = fusion.display_emotion.value.upper()
+    profile = phase_display_label(fusion.profile_phase)
+    phase = phase_display_label(fusion.labeled_phase) if fusion.labeled_phase else "—"
+    cv2.putText(
+        frame,
+        f"Match: {display} ({fusion.profile_confidence:.0%}) | Label: {phase}",
+        (16, height - 132),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        f"Profile best: {profile}",
+        (16, height - 108),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA,
+    )
+    draw_soft_score_bars(frame, fusion, (16, height - 290))
+    draw_profile_match_bars(frame, fusion, (width - 170, height - 290))
     return frame

@@ -4,5 +4,6 @@ __pycache__/
 venv/
 .env
 calibration.json
+emotion_profile.json
 sessions/
 *.summary.txt

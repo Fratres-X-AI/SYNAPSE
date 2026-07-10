@@ -1,0 +1,5 @@
+# Development / packaging dependencies (optional)
+-r requirements.txt
+pystray
+pillow
+pyinstaller
