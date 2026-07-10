@@ -8,28 +8,42 @@ import sys
 import threading
 from pathlib import Path
 
+from utils.app_paths import data_inventory, delete_all_user_data
+from utils.privacy import ensure_privacy_consent
+from utils.settings import UserSettings, load_settings, save_settings
+
 ROOT = Path(__file__).resolve().parent
+RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", ROOT))
 
 SCRIPTS = {
-    "onboard": "test_onboard.py",
-    "monitor": "test_monitor.py",
+    "onboard": "synapse_onboard.py",
+    "monitor": "synapse_monitor.py",
     "replay": "replay_monitor.py",
-    "fusion": "test_fusion_track.py",
+    "fusion": "synapse_fusion.py",
+    "pilot-summary": "synapse_pilot_summary.py",
 }
+UTILITY_COMMANDS = {"first-run", "privacy", "data", "delete-data", "settings"}
 
 DESCRIPTION = """\
 Synapse cognitive monitoring launcher.
 
 Commands:
+  first-run Run privacy notice, onboarding, then first monitor session
   onboard   Run unified onboarding wizard (calibration + emotion profile)
   monitor   Start production monitor mode
   replay    Replay latest monitor session (or pass a CSV path)
   fusion    Run fusion track mode (live N/H/S/M labeling)
+  data      Show local data inventory
+  settings  View or update local app settings
+  privacy   Show privacy notice and record consent
+  delete-data Delete local Synapse user data
 
 Examples:
+  python synapse_launcher.py first-run
   python synapse_launcher.py onboard
   python synapse_launcher.py monitor
   python synapse_launcher.py replay
+  python synapse_launcher.py data
   python synapse_launcher.py monitor --fullscreen
   python synapse_launcher.py replay --fullscreen
   python synapse_launcher.py --tray
@@ -39,6 +53,8 @@ Examples:
 def run_script(script_name: str, extra_args: list[str] | None = None) -> int:
     script_path = ROOT / script_name
     if not script_path.exists():
+        script_path = RESOURCE_ROOT / script_name
+    if not script_path.exists():
         print(f"Error: {script_path} not found", file=sys.stderr)
         return 1
     cmd = [sys.executable, str(script_path), *(extra_args or [])]
@@ -47,11 +63,82 @@ def run_script(script_name: str, extra_args: list[str] | None = None) -> int:
 
 
 def run_command(command: str, extra_args: list[str] | None = None) -> int:
+    if command in UTILITY_COMMANDS:
+        return run_utility(command, extra_args or [])
     script = SCRIPTS.get(command)
     if script is None:
         print(f"Unknown command: {command}", file=sys.stderr)
         return 1
     return run_script(script, extra_args)
+
+
+def run_utility(command: str, extra_args: list[str]) -> int:
+    if command == "first-run":
+        if not ensure_privacy_consent():
+            return 1
+        onboard_code = run_command("onboard", extra_args)
+        if onboard_code != 0:
+            return onboard_code
+        return run_command("monitor", extra_args)
+
+    if command == "privacy":
+        return 0 if ensure_privacy_consent() else 1
+
+    if command == "data":
+        inventory = data_inventory()
+        print("Synapse local data")
+        for key, value in inventory.items():
+            print(f"- {key}: {value}")
+        return 0
+
+    if command == "delete-data":
+        response = input("Delete all local Synapse user data? Type DELETE to confirm: ").strip()
+        if response != "DELETE":
+            print("Delete cancelled.")
+            return 1
+        delete_all_user_data()
+        print("Deleted local Synapse user data.")
+        return 0
+
+    if command == "settings":
+        return run_settings_command(extra_args)
+
+    print(f"Unknown utility command: {command}", file=sys.stderr)
+    return 1
+
+
+def run_settings_command(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="synapse_launcher settings")
+    parser.add_argument("--camera-index", type=int)
+    parser.add_argument("--fullscreen-default", choices=("on", "off"))
+    parser.add_argument("--retention-days", type=int)
+    parser.add_argument("--desktop-export", choices=("on", "off"))
+    parsed = parser.parse_args(args)
+
+    current = load_settings()
+    updated = UserSettings(
+        camera_index=parsed.camera_index if parsed.camera_index is not None else current.camera_index,
+        fullscreen_default=(
+            parsed.fullscreen_default == "on"
+            if parsed.fullscreen_default is not None
+            else current.fullscreen_default
+        ),
+        retention_days=(
+            parsed.retention_days if parsed.retention_days is not None else current.retention_days
+        ),
+        export_reports_to_desktop=(
+            parsed.desktop_export == "on"
+            if parsed.desktop_export is not None
+            else current.export_reports_to_desktop
+        ),
+        privacy_mode=current.privacy_mode,
+    )
+    if updated != current:
+        save_settings(updated)
+    print("Synapse settings")
+    for key, value in updated.__dict__.items():
+        print(f"- {key}: {value}")
+    return 0
 
 
 def command_argv(command: str, extra: list[str], fullscreen: bool) -> list[str]:
@@ -99,9 +186,12 @@ def run_tray() -> int:
         return _action
 
     menu = pystray.Menu(
+        pystray.MenuItem("First Run", launch("first-run")),
         pystray.MenuItem("Onboard", launch("onboard")),
         pystray.MenuItem("Monitor", launch("monitor")),
         pystray.MenuItem("Replay (latest)", launch("replay")),
+        pystray.MenuItem("Pilot Summary", launch("pilot-summary")),
+        pystray.MenuItem("Data Inventory", launch("data")),
         pystray.MenuItem("Fusion Track", launch("fusion")),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", lambda _icon, _item: _icon.stop()),
@@ -122,13 +212,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=sorted(SCRIPTS),
+        choices=sorted(set(SCRIPTS) | UTILITY_COMMANDS),
         help="Synapse mode to launch",
-    )
-    parser.add_argument(
-        "extra",
-        nargs="*",
-        help="Extra arguments (e.g. replay CSV path)",
     )
     parser.add_argument(
         "--tray",
@@ -145,7 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args, extra = parser.parse_known_args(argv)
 
     if args.tray and args.command is None:
         return run_tray()
@@ -153,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command:
         return run_command(
             args.command,
-            command_argv(args.command, args.extra or [], args.fullscreen),
+            command_argv(args.command, extra, args.fullscreen),
         )
 
     if args.tray:

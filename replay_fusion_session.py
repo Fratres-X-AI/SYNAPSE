@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+from utils.config import Config
 from utils.fusion_replay import load_rows, replay_fusion_rows, row_to_fusion
 from utils.fusion_summary import write_fusion_summary
 
@@ -37,7 +38,12 @@ def main() -> None:
     if args.session:
         path = Path(args.session)
     else:
-        sessions = sorted(Path("sessions").glob(SESSION_GLOB))
+        search_dirs = [Config().session_dir, Path("sessions")]
+        sessions = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                sessions.extend(search_dir.glob(SESSION_GLOB))
+        sessions = sorted(set(sessions), key=lambda item: item.stat().st_mtime)
         if not sessions:
             raise SystemExit("No fusion session CSV found in sessions/")
         path = sessions[-1]

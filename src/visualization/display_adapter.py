@@ -16,7 +16,7 @@ def _screen_size() -> tuple[int, int]:
 
 
 class DisplayAdapter(ABC):
-    """Output layer for Synapse. Swap OpenCV today for a wearable HUD tomorrow."""
+    """Output layer for the local webcam dashboard."""
 
     @abstractmethod
     def show(self, frame, cognitive_state: CognitiveState | None = None, autonomy: float | None = None) -> None:

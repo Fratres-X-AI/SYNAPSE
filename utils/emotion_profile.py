@@ -2,7 +2,10 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-DEFAULT_EMOTION_PROFILE_PATH = Path("emotion_profile.json")
+from utils.app_paths import emotion_profile_path
+
+LEGACY_EMOTION_PROFILE_PATH = Path("emotion_profile.json")
+DEFAULT_EMOTION_PROFILE_PATH = emotion_profile_path()
 ACTIVE_PHASES = ("neutral", "happy", "sad", "mad")
 
 PROFILE_KEYS = (
@@ -45,6 +48,7 @@ def save_emotion_profile(
     profile: EmotionProfile,
     path: Path = DEFAULT_EMOTION_PROFILE_PATH,
 ) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(profile), indent=2), encoding="utf-8")
 
 
@@ -52,7 +56,10 @@ def load_emotion_profile(
     path: Path = DEFAULT_EMOTION_PROFILE_PATH,
 ) -> EmotionProfile | None:
     if not path.exists():
-        return None
+        if path == DEFAULT_EMOTION_PROFILE_PATH and LEGACY_EMOTION_PROFILE_PATH.exists():
+            path = LEGACY_EMOTION_PROFILE_PATH
+        else:
+            return None
     data = json.loads(path.read_text(encoding="utf-8"))
     return EmotionProfile(
         neutral=data.get("neutral", {}),

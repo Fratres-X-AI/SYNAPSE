@@ -61,6 +61,7 @@ class StateEstimator:
         self._blink_trough = 1.0
         self._blink_started_at = 0.0
         self._close_frame_streak = 0
+        self._distraction_frame_streak = 0
         self._started_at = monotonic()
 
     def update(self, landmarks: Sequence[Any]) -> CognitiveState:
@@ -142,9 +143,9 @@ class StateEstimator:
         blink_ear: float,
         close_threshold: float,
     ) -> bool:
-        if blink_ear < 0.07:
+        if blink_ear < 0.035:
             return False
-        if abs(left_ear - right_ear) > 0.13:
+        if abs(left_ear - right_ear) > 0.18:
             return False
         if len(self._open_ear_samples) >= 3:
             recent_open = list(self._open_ear_samples)[-3:]
@@ -159,7 +160,7 @@ class StateEstimator:
 
     def _dynamic_close_threshold(self) -> float:
         baseline = self._open_ear_baseline()
-        return min(self.ear_blink_close_threshold, baseline * 0.78)
+        return min(self.ear_blink_close_threshold, baseline * 0.86)
 
     def _eyes_reopened(self, ear: float) -> bool:
         baseline = self._open_ear_baseline()
@@ -180,7 +181,10 @@ class StateEstimator:
     ) -> bool:
         now = monotonic() if now is None else now
         close_threshold = self._dynamic_close_threshold()
-        both_closed = left_ear < close_threshold and right_ear < close_threshold
+        mean_ear = (left_ear + right_ear) / 2.0
+        either_eye_closed = left_ear < close_threshold or right_ear < close_threshold
+        mean_closed = mean_ear < close_threshold
+        both_closed = mean_closed and either_eye_closed
 
         if not self._currently_blinking and both_closed:
             self._close_frame_streak += 1
@@ -200,7 +204,7 @@ class StateEstimator:
                     self._open_ear_samples.append(blink_ear)
         elif (
             both_closed
-            and self._close_frame_streak >= 2
+            and self._close_frame_streak >= 1
             and self._can_register_blink(left_ear, right_ear, blink_ear, close_threshold)
         ):
             self._currently_blinking = True
@@ -306,14 +310,22 @@ class StateEstimator:
     ) -> State:
         mean_ear = self._mean_history(self.ear_history, default=ear)
 
-        if (
+        head_distracted = (
             abs(head_yaw) >= self.distracted_yaw_threshold
             or abs(head_pitch) >= self.distracted_pitch_threshold
             or head_pitch <= -self.distracted_pitch_up_threshold
-            or abs(gaze_x) >= self.distracted_gaze_threshold
+        )
+        gaze_distracted = (
+            abs(gaze_x) >= self.distracted_gaze_threshold
             or gaze_y >= self.distracted_gaze_threshold
             or gaze_y <= -self.distracted_gaze_up_threshold
-        ):
+        )
+        if head_distracted or gaze_distracted:
+            self._distraction_frame_streak += 1
+        else:
+            self._distraction_frame_streak = 0
+
+        if head_distracted or (gaze_distracted and self._distraction_frame_streak >= 6):
             return State.DISTRACTED
 
         if blink_rate >= self.high_blink_rate_threshold and mean_ear <= self.low_ear_threshold:

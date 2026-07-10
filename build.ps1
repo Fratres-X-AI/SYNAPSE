@@ -32,6 +32,10 @@ pyinstaller `
     --hidden-import pystray `
     --add-data "src;src" `
     --add-data "utils;utils" `
+    --add-data "synapse_onboard.py;." `
+    --add-data "synapse_monitor.py;." `
+    --add-data "synapse_fusion.py;." `
+    --add-data "synapse_pilot_summary.py;." `
     synapse_launcher.py
 
 if ($LASTEXITCODE -ne 0) {
@@ -44,8 +48,11 @@ Write-Host ""
 Write-Host "Build complete: $exe" -ForegroundColor Green
 Write-Host ""
 Write-Host "Usage:"
+Write-Host "  .\dist\Synapse.exe first-run"
 Write-Host "  .\dist\Synapse.exe onboard"
 Write-Host "  .\dist\Synapse.exe monitor"
 Write-Host "  .\dist\Synapse.exe replay"
 Write-Host "  .\dist\Synapse.exe fusion"
+Write-Host "  .\dist\Synapse.exe data"
+Write-Host "  .\dist\Synapse.exe pilot-summary"
 Write-Host "  .\dist\Synapse.exe --tray"

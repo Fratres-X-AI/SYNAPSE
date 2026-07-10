@@ -2,7 +2,6 @@ import argparse
 import csv
 from collections import deque
 from datetime import datetime
-from pathlib import Path
 from time import monotonic
 
 import cv2
@@ -19,10 +18,12 @@ from src.visualization.alerts import StateAlertTracker
 from src.visualization.dashboard import render_fusion_dashboard
 from src.visualization.display_adapter import create_display_adapter
 from utils.config import Config
+from utils.app_paths import cleanup_old_data
 from utils.emotion_profile import EmotionProfile, load_emotion_profile
 from utils.manager_report import write_manager_report
+from utils.privacy import ensure_privacy_consent
+from utils.settings import load_settings
 
-SESSION_DIR = Path("sessions")
 SUMMARY_EVERY_SECONDS = 30
 
 
@@ -35,13 +36,24 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = Config(fullscreen=args.fullscreen)
-    SESSION_DIR.mkdir(exist_ok=True)
+    settings = load_settings()
+    if not ensure_privacy_consent():
+        return
+
+    config.session_dir.mkdir(parents=True, exist_ok=True)
+    deleted = cleanup_old_data(settings.retention_days)
+    if deleted:
+        print(f"Cleaned up {len(deleted)} old local data file(s).")
     session_name = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = SESSION_DIR / f"monitor_{session_name}.csv"
-    alert_log_path = SESSION_DIR / f"monitor_{session_name}.alerts.csv"
+    log_path = config.session_dir / f"monitor_{session_name}.csv"
+    alert_log_path = config.session_dir / f"monitor_{session_name}.alerts.csv"
 
     profile = load_emotion_profile(config.emotion_profile_path) or EmotionProfile()
-    camera = CameraCapture(camera_index=config.camera_index)
+    try:
+        camera = CameraCapture(camera_index=config.camera_index)
+    except RuntimeError as error:
+        print(f"Camera error: {error}")
+        return
     estimator = StateEstimator(**config.estimator_kwargs())
     emotion_estimator = EmotionEstimator(calibration_frames=0)
     if profile.has_neutral():
@@ -67,7 +79,7 @@ def main() -> None:
     if profile.has_neutral():
         print("Loaded emotion profile: N / H / S/S / Mad")
     else:
-        print("No profile — run: python test_onboard.py")
+        print("No profile - run: python synapse_launcher.py onboard")
     print("Alert rules: low engagement 2m | high distraction 2m | fatigue 1m | tension 90s")
     print("Act naturally. Press 'q' to stop, 'f' for fullscreen.")
 
@@ -111,6 +123,8 @@ def main() -> None:
             while True:
                 frame, landmarks = camera.get_frame_and_landmarks()
                 if frame is None:
+                    if camera.failed_reads in (1, 30, 120):
+                        print(f"Camera read failed ({camera.failed_reads} consecutive frames).")
                     continue
 
                 now = monotonic()
@@ -203,6 +217,17 @@ def main() -> None:
                     estimator,
                     flash=flash,
                 )
+                if landmarks is None:
+                    cv2.putText(
+                        frame,
+                        "No face detected - center yourself and improve lighting",
+                        (16, 32),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.62,
+                        (0, 180, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
                 if fusion and active_alerts:
                     cv2.putText(
                         frame,
@@ -237,12 +262,12 @@ def main() -> None:
                 report = write_manager_report(
                     log_path,
                     alert_flags=monitor_alerts.summary_flags(),
-                    export_desktop=True,
+                    export_desktop=settings.export_reports_to_desktop,
                 )
                 print("\n" + report)
                 print(f"\nReport saved to {log_path.with_suffix('.report.txt')}")
-                desktop = Path.home() / "Desktop"
-                print(f"Copy exported to Desktop: Synapse_Report_*.txt")
+                if settings.export_reports_to_desktop:
+                    print("Copy exported to Desktop: Synapse_Report_*.txt")
 
 
 if __name__ == "__main__":

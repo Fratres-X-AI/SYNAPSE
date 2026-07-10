@@ -3,10 +3,17 @@ import mediapipe as mp
 
 
 class CameraCapture:
-    """Frame and face-landmark capture for webcam now, wearable camera later."""
+    """Frame and face-landmark capture for the local webcam."""
 
     def __init__(self, camera_index: int = 0) -> None:
+        self.camera_index = camera_index
+        self.failed_reads = 0
         self.cap = cv2.VideoCapture(camera_index)
+        if not self.cap.isOpened():
+            raise RuntimeError(
+                f"Could not open webcam index {camera_index}. "
+                "Check camera permissions or choose another camera in settings."
+            )
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             max_num_faces=1,
@@ -18,7 +25,9 @@ class CameraCapture:
     def get_frame_and_landmarks(self):
         ret, frame = self.cap.read()
         if not ret:
+            self.failed_reads += 1
             return None, None
+        self.failed_reads = 0
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.face_mesh.process(rgb_frame)

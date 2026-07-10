@@ -4,6 +4,7 @@ from pathlib import Path
 
 from utils.fusion_replay import load_rows, replay_fusion_rows, row_to_fusion_monitor
 from utils.manager_report import write_manager_report
+from utils.config import Config
 
 SESSION_DIR = Path("sessions")
 
@@ -16,9 +17,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def latest_monitor_session(directory: Path = SESSION_DIR) -> Path | None:
-    if not directory.exists():
-        return None
-    sessions = sorted(directory.glob("monitor_*.csv"), key=lambda p: p.stat().st_mtime)
+    search_dirs = [Config().session_dir, directory]
+    sessions = []
+    for search_dir in search_dirs:
+        if search_dir.exists():
+            sessions.extend(search_dir.glob("monitor_*.csv"))
+    sessions = sorted(set(sessions), key=lambda p: p.stat().st_mtime)
     return sessions[-1] if sessions else None
 
 

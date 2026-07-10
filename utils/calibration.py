@@ -2,7 +2,10 @@ import json
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
-DEFAULT_CALIBRATION_PATH = Path("calibration.json")
+from utils.app_paths import calibration_path
+
+LEGACY_CALIBRATION_PATH = Path("calibration.json")
+DEFAULT_CALIBRATION_PATH = calibration_path()
 
 
 @dataclass
@@ -23,12 +26,16 @@ class CalibrationProfile:
 
 
 def save_calibration(profile: CalibrationProfile, path: Path = DEFAULT_CALIBRATION_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(profile), indent=2), encoding="utf-8")
 
 
 def load_calibration(path: Path = DEFAULT_CALIBRATION_PATH) -> CalibrationProfile | None:
     if not path.exists():
-        return None
+        if path == DEFAULT_CALIBRATION_PATH and LEGACY_CALIBRATION_PATH.exists():
+            path = LEGACY_CALIBRATION_PATH
+        else:
+            return None
 
     defaults = {field.name: field.default for field in fields(CalibrationProfile)}
     data = json.loads(path.read_text(encoding="utf-8"))

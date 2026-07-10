@@ -1,64 +1,95 @@
 # Synapse
 
-Synapse is a closed-loop cognitive state system. It starts with webcam-based facial landmarks, estimates a user's cognitive state in real time, and adapts autonomous behavior from that state.
+Synapse is a webcam-first, local-first focus and fatigue support tool. It uses the local webcam to extract face landmarks on-device, estimates coarse attention signals in real time, and saves session summaries for review.
 
-The long-term target is a wearable form factor, such as a small inward-facing camera mounted near the eye. For that reason, the first estimator prioritizes eye behavior, blink dynamics, and lightweight head movement signals.
+Synapse is pilot software. It is not a medical device, lie detector, emotion oracle, productivity scoring system, or employee discipline tool.
 
-## Current Loop
+## What It Does
 
-1. `CameraCapture` reads webcam frames and extracts MediaPipe Face Mesh landmarks.
-2. `StateEstimator` converts landmarks into signals like EAR, blink rate, and head yaw.
-3. `CognitiveState` represents the user's current state and confidence.
-4. `AdaptiveAgent` adjusts autonomy based on that state.
-5. `render_status` overlays the state and signals on the camera feed.
+- Runs webcam processing locally with MediaPipe and OpenCV.
+- Guides each user through onboarding: attention calibration plus an optional expression profile.
+- Monitors live sessions for engagement, fatigue, tension, positivity, distraction, and broad attention state.
+- Saves local CSV logs, alert logs, and text reports for review.
+- Replays saved monitor sessions for debriefing and quality checks.
 
-## Project Structure
-
-```text
-synapse/
-├── main.py
-├── requirements.txt
-├── README.md
-├── src/
-│   ├── perception/
-│   │   ├── capture.py
-│   │   └── state_estimator.py
-│   ├── cognition/
-│   │   └── cognitive_state.py
-│   ├── adaptation/
-│   │   └── adaptive_agent.py
-│   └── visualization/
-│       └── display.py
-└── utils/
-    └── config.py
-```
+Raw webcam video is not saved by Synapse. See `docs/privacy.md` before any pilot use.
 
 ## Setup
 
+Use Python 3.11+ on Windows with a working webcam.
+
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python main.py
 ```
 
-Press `q` in the camera window to quit.
+Optional tray and packaging dependencies:
 
-## Cognitive States
+```powershell
+pip install -r requirements-dev.txt
+```
 
-- `high_attention`
-- `moderate`
-- `fatigued`
-- `distracted`
+## Launcher Commands
 
-## Starter Rules
+Run commands from the repository root:
 
-- High blink rate and low EAR -> `fatigued`
-- Significant head yaw -> `distracted`
-- Normal EAR, low blink rate, and forward head pose -> `high_attention`
-- Everything else -> `moderate`
+```powershell
+python synapse_launcher.py onboard
+python synapse_launcher.py monitor
+python synapse_launcher.py monitor --fullscreen
+python synapse_launcher.py replay "%LOCALAPPDATA%\Synapse\sessions\monitor_YYYYMMDD_HHMMSS.csv"
+python synapse_launcher.py --tray
+```
 
-## Next Steps
+`onboard` records privacy consent, then captures calibration values and an expression profile. `monitor` starts a live webcam session and writes logs/reports. `replay` opens a saved session CSV; pass the CSV path explicitly for app-data sessions. Press `q` to quit a camera window and `f` to toggle fullscreen where supported.
 
-- Calibrate EAR thresholds per user.
-- Replace lightweight yaw estimation with a proper `solvePnP` head pose model.
-- Add gaze direction from iris landmarks.
-- Add a wearable camera adapter under `src/perception`.
+## Local Data
+
+On Windows, Synapse stores user data under:
+
+```text
+%LOCALAPPDATA%\Synapse
+```
+
+Expected contents:
+
+- `config\privacy_consent.json`
+- `config\calibration.json`
+- `config\emotion_profile.json`
+- `config\settings.json`
+- `sessions\monitor_*.csv`
+- `sessions\monitor_*.alerts.csv`
+- `sessions\monitor_*.report.txt`
+
+By default, monitor reports may also be copied to the Desktop as `Synapse_Report_*.txt`.
+
+## Pilot Workflow
+
+Use the no-payment pilot process in `docs/pilot_guide.md` until the software quality gate is met.
+
+1. Explain consent and limitations.
+2. Run `python synapse_launcher.py onboard`.
+3. Run a short camera/environment check.
+4. Run `python synapse_launcher.py monitor`.
+5. Stop with `q`, review the generated report, and replay the session if needed.
+
+## Build
+
+For a smoke-test Windows executable, install dev dependencies and run the checked-in build script:
+
+```powershell
+pip install -r requirements-dev.txt
+.\build.ps1
+```
+
+Verify the build with `docs/release_checklist.md` before sharing it with pilot users.
+
+## Documentation
+
+- `docs/privacy.md` - privacy model, saved data, deletion/export controls, consent language.
+- `docs/pilot_guide.md` - 5-person no-payment pilot workflow.
+- `docs/release_checklist.md` - Windows release verification checklist.
+- `docs/known_issues.md` - current limitations and webcam constraints.
+- `docs/positioning.md` - approved positioning and prohibited claims.
+- `docs/monetization_gate.md` - no-billing rule until the quality gate is proven.

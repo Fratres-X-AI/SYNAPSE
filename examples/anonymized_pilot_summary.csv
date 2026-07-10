@@ -1,0 +1,4 @@
+session,duration,samples,dominant_state,avg_engagement_pct,avg_fatigue_pct,avg_tension_pct,avg_distraction_pct,recommendation
+participant_a_day1,0:25:00,45000,high_attention,78%,12%,18%,22%,No major focus/fatigue flag for this session.
+participant_b_day1,0:20:00,36000,moderate,58%,28%,21%,44%,Try a shorter focused block and compare the next session.
+participant_c_day1,0:18:00,32400,distracted,42%,19%,16%,68%,Review environment and reduce off-screen interruptions.

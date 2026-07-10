@@ -20,6 +20,7 @@ from utils.emotion_profile import (
     PHASE_LABELS,
     save_emotion_profile,
 )
+from utils.privacy import ensure_privacy_consent
 
 mp_face_mesh = mp.solutions.face_mesh
 
@@ -79,10 +80,33 @@ def draw_text_block(frame, lines: list[str], y_start: int = 32, color=(0, 255, 2
     return frame
 
 
-def draw_calibration_overlay(frame, step: CalStep, progress: float, ear: float | None):
+def frame_quality(frame, face_detected: bool) -> tuple[str, tuple[int, int, int]]:
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    brightness = float(gray.mean())
+    contrast = float(gray.std())
+    if not face_detected:
+        return "Face not detected - center yourself in frame", (0, 140, 255)
+    if brightness < 65:
+        return "Lighting low - add light in front of your face", (0, 140, 255)
+    if brightness > 215:
+        return "Lighting too bright - reduce glare", (0, 140, 255)
+    if contrast < 22:
+        return "Image is flat - improve lighting or camera angle", (0, 140, 255)
+    return "Webcam quality good", (80, 220, 100)
+
+
+def draw_calibration_overlay(
+    frame,
+    step: CalStep,
+    progress: float,
+    ear: float | None,
+    quality_message: str,
+    quality_color: tuple[int, int, int],
+):
     lines = [
-        "SYNAPSE ONBOARDING — Part 1: Attention Calibration",
+        "SYNAPSE ONBOARDING - Part 1: Attention Calibration",
         step.prompt,
+        quality_message,
         f"Progress: {int(progress * 100)}%",
     ]
     if ear is not None:
@@ -91,6 +115,7 @@ def draw_calibration_overlay(frame, step: CalStep, progress: float, ear: float |
         lines.append("Press SPACE when finished with this step")
     lines.append("Press Q to quit")
     frame = draw_text_block(frame, lines)
+    cv2.circle(frame, (frame.shape[1] - 32, 32), 10, quality_color, -1)
 
     bar_width = frame.shape[1] - 32
     filled = int(bar_width * progress)
@@ -100,7 +125,7 @@ def draw_calibration_overlay(frame, step: CalStep, progress: float, ear: float |
     return frame
 
 
-def run_calibration() -> dict | None:
+def run_calibration(config: Config) -> dict | None:
     face_mesh = mp_face_mesh.FaceMesh(
         max_num_faces=1,
         refine_landmarks=True,
@@ -108,7 +133,10 @@ def run_calibration() -> dict | None:
         min_tracking_confidence=0.5,
     )
     estimator = StateEstimator()
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(config.camera_index)
+    if not cap.isOpened():
+        print(f"Could not open webcam index {config.camera_index}.")
+        return None
 
     samples = {
         "center_ear": 0.0,
@@ -169,10 +197,12 @@ def run_calibration() -> dict | None:
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb_frame)
 
+        face_detected = bool(results.multi_face_landmarks)
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0].landmark
             ear_value, yaw, pitch, gaze_mag, gaze_y = collect_signals(landmarks)
             update_samples(step.step_id, ear_value, yaw, pitch, gaze_mag, gaze_y)
+        quality_message, quality_color = frame_quality(frame, face_detected)
 
         if step.duration is None:
             progress = min(1.0, elapsed / 8.0)
@@ -189,7 +219,7 @@ def run_calibration() -> dict | None:
                     print(f"-> {CALIBRATION_STEPS[step_index].prompt}")
                 continue
 
-        frame = draw_calibration_overlay(frame, step, progress, ear_value)
+        frame = draw_calibration_overlay(frame, step, progress, ear_value, quality_message, quality_color)
         cv2.imshow("Synapse - Onboarding", frame)
 
         key = cv2.waitKey(1) & 0xFF
@@ -224,7 +254,7 @@ def draw_expression_overlay(
     last_signals: dict | None,
 ):
     lines = [
-        "SYNAPSE ONBOARDING — Part 2: Expression Profile",
+        "SYNAPSE ONBOARDING - Part 2: Expression Profile",
         step.prompt,
         "",
         "Captured:",
@@ -308,6 +338,8 @@ def run_expression_capture(config: Config) -> EmotionProfile | None:
 
 def main() -> None:
     config = Config()
+    if not ensure_privacy_consent():
+        return
 
     print("=" * 56)
     print("  SYNAPSE ONBOARDING WIZARD")
@@ -316,7 +348,7 @@ def main() -> None:
     print("=" * 56)
     print()
 
-    samples = run_calibration()
+    samples = run_calibration(config)
     if samples is None:
         return
 

@@ -2,7 +2,6 @@ import argparse
 import csv
 from collections import deque
 from datetime import datetime
-from pathlib import Path
 from time import monotonic
 
 from src.adaptation.adaptive_agent import AdaptiveAgent
@@ -17,14 +16,12 @@ from src.visualization.dashboard import render_fusion_dashboard
 from src.visualization.display_adapter import create_display_adapter
 from utils.config import Config
 from utils.emotion_profile import (
-    DEFAULT_EMOTION_PROFILE_PATH,
     EmotionProfile,
     load_emotion_profile,
     save_emotion_profile,
 )
 from utils.fusion_summary import write_fusion_summary
-
-SESSION_DIR = Path("sessions")
+from utils.privacy import ensure_privacy_consent
 
 PHASE_KEYS = {
     ord("n"): "neutral",
@@ -47,12 +44,18 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = Config(fullscreen=args.fullscreen)
-    SESSION_DIR.mkdir(exist_ok=True)
+    if not ensure_privacy_consent():
+        return
+    config.session_dir.mkdir(parents=True, exist_ok=True)
     session_name = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = SESSION_DIR / f"fusion_track_{session_name}.csv"
+    log_path = config.session_dir / f"fusion_track_{session_name}.csv"
 
     profile = load_emotion_profile(config.emotion_profile_path) or EmotionProfile()
-    camera = CameraCapture(camera_index=config.camera_index)
+    try:
+        camera = CameraCapture(camera_index=config.camera_index)
+    except RuntimeError as error:
+        print(f"Camera error: {error}")
+        return
     estimator = StateEstimator(**config.estimator_kwargs())
     emotion_estimator = EmotionEstimator(calibration_frames=0)
     if profile.has_neutral():

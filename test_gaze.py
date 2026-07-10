@@ -26,16 +26,22 @@ def draw_gaze(frame, landmarks):
         (StateEstimator.LEFT_EYE, StateEstimator.LEFT_IRIS, (0, 255, 255)),
         (StateEstimator.RIGHT_EYE, StateEstimator.RIGHT_IRIS, (0, 255, 255)),
     ):
-        outer = landmarks[eye_indices[0]]
-        inner = landmarks[eye_indices[3]]
+        points = np.array(
+            [(int(landmarks[index].x * width), int(landmarks[index].y * height)) for index in eye_indices],
+            dtype=np.float32,
+        )
         iris = landmarks[iris_index]
-
-        outer_pt = (int(outer.x * width), int(outer.y * height))
-        inner_pt = (int(inner.x * width), int(inner.y * height))
         iris_pt = (int(iris.x * width), int(iris.y * height))
 
-        cv2.line(frame, outer_pt, inner_pt, color, 1)
-        cv2.circle(frame, iris_pt, 5, (0, 0, 255), -1)
+        if len(points) >= 5:
+            x, y, eye_width, eye_height = cv2.boundingRect(points.astype(np.int32))
+            center = (x + eye_width / 2.0, y + eye_height / 2.0)
+            halo_size = (
+                max(eye_width * 1.15, eye_width + 8),
+                max(eye_height * 3.0, eye_height + 18),
+            )
+            cv2.ellipse(frame, (center, halo_size, 0), color, 4)
+        cv2.circle(frame, iris_pt, 6, (0, 0, 255), -1)
 
     return frame
 

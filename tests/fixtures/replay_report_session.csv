@@ -1,0 +1,4 @@
+elapsed_sec,state,labeled_phase,profile_phase,emotion,engagement,fatigue,tension,positivity,distraction
+1.0,moderate,,neutral,neutral,0.52,0.24,0.20,0.51,35
+4.0,moderate,,neutral,neutral,0.48,0.31,0.22,0.50,42
+9.0,fatigued,,sad,sad,0.38,0.66,0.45,0.35,55

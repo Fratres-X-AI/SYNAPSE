@@ -2,6 +2,7 @@ from pathlib import Path
 import shutil
 from datetime import datetime
 
+from utils.app_paths import reports_dir
 from utils.fusion_summary import summarize_fusion_csv
 
 
@@ -11,15 +12,15 @@ def build_manager_report(summary: dict, session_name: str, alert_flags: list[str
 
     flags = []
     if summary.get("avg_engagement", 0) < 0.45:
-        flags.append("Low engagement — subject may be disengaged or frequently looking away.")
+        flags.append("Low focus signal - frequent gaze-away or reduced attention indicators.")
     if summary.get("avg_fatigue", 0) > 0.55:
-        flags.append("Elevated fatigue — elevated blink rate or drooping eyes detected.")
+        flags.append("Elevated fatigue signal - blink and eye openness patterns suggest a break may help.")
     if summary.get("avg_tension", 0) > 0.40:
-        flags.append("Elevated tension — brow strain or squint patterns detected.")
+        flags.append("Elevated strain signal - facial tension patterns were higher than baseline.")
     if summary.get("avg_distraction", 0) > 60:
-        flags.append("High distraction — frequent off-screen gaze or head turns.")
+        flags.append("High distraction signal - frequent off-screen gaze or head turns.")
     if summary.get("avg_positivity", 0) > 0.65:
-        flags.append("Positive affect — expression skews toward happy baseline.")
+        flags.append("Positive expression pattern - optional profile matching skewed toward the happy baseline.")
     if alert_flags:
         flags.extend(alert_flags)
     if not flags:
@@ -29,12 +30,12 @@ def build_manager_report(summary: dict, session_name: str, alert_flags: list[str
     profile_breakdown = summary.get("profile_phase_breakdown", {})
 
     lines = [
-        "SYNAPSE MONITOR REPORT",
+        "SYNAPSE FOCUS SESSION REPORT",
         f"Session: {session_name}",
         f"Duration: {summary.get('duration_label', '?')} ({summary.get('duration_seconds', 0)}s)",
         f"Samples: {summary.get('record_count', 0)}",
         "",
-        "EXECUTIVE SUMMARY",
+        "SESSION SUMMARY",
         f"- Dominant attention state: {dominant}",
         f"- Engagement: {summary.get('avg_engagement', 0):.0%}",
         f"- Fatigue: {summary.get('avg_fatigue', 0):.0%}",
@@ -42,14 +43,30 @@ def build_manager_report(summary: dict, session_name: str, alert_flags: list[str
         f"- Positivity: {summary.get('avg_positivity', 0):.0%}",
         f"- Distraction: {summary.get('avg_distraction', 0):.0f}%",
         "",
-        "EXPRESSION PROFILE (auto-matched)",
+        "OPTIONAL EXPRESSION-PATTERN MATCH",
     ]
+    lines.append("- These are personal baseline pattern matches, not emotional diagnoses.")
     for phase, count in sorted(profile_breakdown.items(), key=lambda item: -item[1]):
-        label = {"sad": "sad/stressed", "mad": "mad"}.get(phase, phase)
+        label = {
+            "neutral": "neutral baseline",
+            "happy": "happy baseline",
+            "sad": "sad/stressed baseline",
+            "mad": "frustration baseline",
+        }.get(phase, phase)
         pct = count / summary["record_count"] * 100
         lines.append(f"- {label}: {pct:.0f}% ({count} frames)")
 
-    lines.extend(["", "FLAGS"])
+    lines.extend(
+        [
+            "",
+            "INTERPRETATION LIMITS",
+            "- Webcam signals are support signals for focus and fatigue awareness.",
+            "- Synapse does not save raw video frames.",
+            "- Do not use this report as a medical, disciplinary, or emotion-detection record.",
+            "",
+            "FOCUS FLAGS",
+        ]
+    )
     lines.extend(f"- {flag}" for flag in flags)
     return "\n".join(lines)
 
@@ -74,6 +91,8 @@ def write_manager_report(
     report = build_manager_report(summary, csv_path.name, alert_flags=alert_flags)
     report_path = csv_path.with_suffix(".report.txt")
     report_path.write_text(report + "\n", encoding="utf-8")
+    reports_dir().mkdir(parents=True, exist_ok=True)
+    shutil.copy2(report_path, reports_dir() / report_path.name)
 
     if export_desktop:
         desktop_path = export_report_to_desktop(report, csv_path.name)

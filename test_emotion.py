@@ -109,14 +109,16 @@ def draw_eye_ring(frame, landmarks, ring_indices, color):
     if len(points) < 5:
         return frame
 
-    cv2.polylines(frame, [points.astype(np.int32)], True, color, 2)
-    for point in points.astype(np.int32):
-        cv2.circle(frame, tuple(point), 3, color, -1)
+    x, y, eye_width, eye_height = cv2.boundingRect(points.astype(np.int32))
+    center = (x + eye_width / 2.0, y + eye_height / 2.0)
+    halo_size = (
+        max(eye_width * 1.15, eye_width + 8),
+        max(eye_height * 3.0, eye_height + 18),
+    )
 
-    ellipse = cv2.fitEllipse(points)
-    cv2.ellipse(frame, ellipse, color, 2)
-    center = (int(ellipse[0][0]), int(ellipse[0][1]))
-    cv2.circle(frame, center, 2, (0, 0, 255), -1)
+    # Draw a larger halo around the eye so the guide does not sit on eyelashes.
+    cv2.ellipse(frame, (center, halo_size, 0), color, 3)
+    cv2.circle(frame, (int(center[0]), int(center[1])), 4, (0, 0, 255), -1)
     return frame
 
 

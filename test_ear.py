@@ -38,9 +38,18 @@ def draw_eye_landmarks(frame, landmarks, eye_indices, color):
         x = int(landmark.x * width)
         y = int(landmark.y * height)
         points.append((x, y))
-        cv2.circle(frame, (x, y), 2, color, -1)
 
-    cv2.polylines(frame, [np.array(points[:4], dtype=np.int32)], False, color, 1)
+    point_array = np.array(points, dtype=np.float32)
+    if len(point_array) >= 5:
+        x, y, eye_width, eye_height = cv2.boundingRect(point_array.astype(np.int32))
+        center = (x + eye_width / 2.0, y + eye_height / 2.0)
+        halo_size = (
+            max(eye_width * 1.15, eye_width + 8),
+            max(eye_height * 3.0, eye_height + 18),
+        )
+        cv2.ellipse(frame, (center, halo_size, 0), color, 4)
+    else:
+        cv2.polylines(frame, [np.array(points, dtype=np.int32)], True, color, 3)
     return frame
 
 
