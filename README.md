@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/synapse-hero.png" alt="Synapse logo" width="100%" />
+</p>
+
 # Synapse
 
 Synapse is a webcam-first, local-first focus and fatigue support tool. It uses the local webcam to extract face landmarks on-device, estimates coarse attention signals in real time, and saves session summaries for review.
