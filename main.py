@@ -13,6 +13,9 @@ def main() -> None:
     estimator = StateEstimator()
     agent = AdaptiveAgent()
 
+    print("Starting Synapse closed loop... Press 'q' in the window to quit.")
+    print("Signals: EAR, blinks, head pose, gaze -> cognitive state -> agent autonomy")
+
     try:
         while True:
             frame, landmarks = camera.get_frame_and_landmarks()
@@ -25,14 +28,19 @@ def main() -> None:
                 cognitive_state = estimator.update(landmarks)
                 agent.adapt(cognitive_state)
                 behavior = agent.get_behavior()
+                signals = cognitive_state.signals
+                blink_label = "BLINKING" if signals["is_blinking"] else "open"
 
                 print(
-                    f"State: {cognitive_state.state.value} | "
-                    f"Confidence: {cognitive_state.confidence:.2f} | "
-                    f"EAR: {cognitive_state.signals['ear']:.3f} | "
-                    f"Blink rate: {cognitive_state.signals['blink_rate']:.1f}/min | "
-                    f"Yaw: {cognitive_state.signals['head_yaw']:.1f} | "
-                    f"{behavior}"
+                    f"State: {cognitive_state.state.value} "
+                    f"({cognitive_state.confidence:.0%}) | "
+                    f"EAR: {signals['ear']:.3f} | "
+                    f"Blinks: {signals['blink_counter']} ({signals['blink_rate']:.1f}/min) | "
+                    f"Yaw: {signals['head_yaw']:+.1f} Pitch: {signals['head_pitch']:+.1f} | "
+                    f"Gaze: {signals['gaze_direction']} | "
+                    f"Autonomy: {agent.autonomy_level:.2f} | "
+                    f"Eyes: {blink_label}",
+                    end="\r",
                 )
 
             frame = render_status(frame, cognitive_state, behavior)
@@ -41,6 +49,7 @@ def main() -> None:
                 break
     finally:
         camera.release()
+        print("\nSynapse closed loop ended.")
 
 
 if __name__ == "__main__":
