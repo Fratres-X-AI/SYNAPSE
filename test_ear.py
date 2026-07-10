@@ -3,6 +3,7 @@ import mediapipe as mp
 import numpy as np
 
 from src.perception.state_estimator import StateEstimator
+from utils.calibration import load_calibration
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
@@ -16,7 +17,13 @@ LEFT_EYE = StateEstimator.LEFT_EYE
 RIGHT_EYE = StateEstimator.RIGHT_EYE
 EYE_INDICES = set(LEFT_EYE + RIGHT_EYE)
 
-estimator = StateEstimator()
+estimator_kwargs = {}
+profile = load_calibration()
+if profile is not None:
+    estimator_kwargs = profile.to_estimator_kwargs()
+    print("Loaded calibration from calibration.json")
+
+estimator = StateEstimator(**estimator_kwargs)
 cap = cv2.VideoCapture(0)
 
 print("Starting EAR test... Press 'q' to quit.")
@@ -60,6 +67,7 @@ while True:
             f"Mean EAR: {signals['mean_ear']:.3f}",
             f"Blink rate: {signals['blink_rate']:.1f}/min",
             f"Blink count: {signals['blink_counter']}",
+            f"Close thresh: {estimator._dynamic_close_threshold():.3f}",
             f"Status: {blink_label}",
         ]
 

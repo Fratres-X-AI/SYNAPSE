@@ -23,19 +23,32 @@ class StateEstimator:
     def __init__(
         self,
         ear_blink_threshold: float = 0.21,
+        ear_blink_open_threshold: float | None = None,
         low_ear_threshold: float = 0.24,
         high_blink_rate_threshold: float = 25.0,
         distracted_yaw_threshold: float = 25.0,
         distracted_pitch_threshold: float = 20.0,
-        distracted_gaze_threshold: float = 0.18,
+        gaze_label_threshold: float = 0.12,
+        distracted_gaze_threshold: float = 0.34,
+        distracted_gaze_up_threshold: float = 0.22,
+        gaze_meter_threshold: float = 0.30,
+        distracted_pitch_up_threshold: float = 14.0,
         history_seconds: float = 60.0,
     ) -> None:
-        self.ear_blink_threshold = ear_blink_threshold
+        self.ear_blink_close_threshold = ear_blink_threshold
+        self.ear_blink_open_threshold = ear_blink_open_threshold or max(
+            ear_blink_threshold + 0.025,
+            low_ear_threshold * 0.9,
+        )
         self.low_ear_threshold = low_ear_threshold
         self.high_blink_rate_threshold = high_blink_rate_threshold
         self.distracted_yaw_threshold = distracted_yaw_threshold
         self.distracted_pitch_threshold = distracted_pitch_threshold
+        self.gaze_label_threshold = gaze_label_threshold
         self.distracted_gaze_threshold = distracted_gaze_threshold
+        self.distracted_gaze_up_threshold = distracted_gaze_up_threshold
+        self.gaze_meter_threshold = gaze_meter_threshold
+        self.distracted_pitch_up_threshold = distracted_pitch_up_threshold
         self.history_seconds = history_seconds
 
         self.blink_counter = 0
@@ -43,7 +56,11 @@ class StateEstimator:
         self.head_yaw_history: deque[tuple[float, float]] = deque()
         self.head_pitch_history: deque[tuple[float, float]] = deque()
         self.blink_timestamps: deque[float] = deque()
+        self._open_ear_samples: deque[float] = deque(maxlen=15)
         self._currently_blinking = False
+        self._blink_trough = 1.0
+        self._blink_started_at = 0.0
+        self._close_frame_streak = 0
         self._started_at = monotonic()
 
     def update(self, landmarks: Sequence[Any]) -> CognitiveState:
@@ -52,7 +69,13 @@ class StateEstimator:
         """
         now = monotonic()
         ear = self._calculate_ear(landmarks)
-        is_blinking = self._detect_blink(ear, now)
+        left_ear, right_ear, blink_ear = self._calculate_blink_ears(landmarks)
+        tracking_stable = self._face_tracking_stable(landmarks)
+        is_blinking = (
+            self._detect_blink(left_ear, right_ear, blink_ear, now)
+            if tracking_stable
+            else self._handle_occlusion(blink_ear)
+        )
         blink_rate = self._get_blink_rate(now)
         head_yaw = self._estimate_head_yaw(landmarks)
         head_pitch = self._estimate_head_pitch(landmarks)
@@ -92,17 +115,103 @@ class StateEstimator:
         right_ear = self._eye_aspect_ratio(landmarks, self.RIGHT_EYE)
         return float((left_ear + right_ear) / 2.0)
 
-    def _detect_blink(self, ear: float, now: float | None = None) -> bool:
-        now = monotonic() if now is None else now
-        is_closed = ear < self.ear_blink_threshold
+    def _calculate_blink_ears(self, landmarks: Sequence[Any]) -> tuple[float, float, float]:
+        left_ear = self._eye_aspect_ratio(landmarks, self.LEFT_EYE)
+        right_ear = self._eye_aspect_ratio(landmarks, self.RIGHT_EYE)
+        return left_ear, right_ear, float(min(left_ear, right_ear))
 
-        if is_closed and not self._currently_blinking:
+    def _face_tracking_stable(self, landmarks: Sequence[Any]) -> bool:
+        left_face = landmarks[self.LEFT_FACE]
+        right_face = landmarks[self.RIGHT_FACE]
+        forehead = landmarks[self.FOREHEAD]
+        chin = landmarks[self.CHIN]
+        face_width = abs(right_face.x - left_face.x)
+        face_height = abs(chin.y - forehead.y)
+        return face_width > 0.08 and face_height > 0.12
+
+    def _handle_occlusion(self, ear: float) -> bool:
+        self._close_frame_streak = 0
+        if self._currently_blinking:
+            self._currently_blinking = False
+        return False
+
+    def _can_register_blink(
+        self,
+        left_ear: float,
+        right_ear: float,
+        blink_ear: float,
+        close_threshold: float,
+    ) -> bool:
+        if blink_ear < 0.07:
+            return False
+        if abs(left_ear - right_ear) > 0.13:
+            return False
+        if len(self._open_ear_samples) >= 3:
+            recent_open = list(self._open_ear_samples)[-3:]
+            if float(np.mean(recent_open)) < close_threshold:
+                return False
+        return True
+
+    def _open_ear_baseline(self) -> float:
+        if self._open_ear_samples:
+            return float(np.mean(self._open_ear_samples))
+        return self.low_ear_threshold
+
+    def _dynamic_close_threshold(self) -> float:
+        baseline = self._open_ear_baseline()
+        return min(self.ear_blink_close_threshold, baseline * 0.78)
+
+    def _eyes_reopened(self, ear: float) -> bool:
+        baseline = self._open_ear_baseline()
+        recovery = ear - self._blink_trough
+        recovery_target = max(0.010, (baseline - self._blink_trough) * 0.28)
+        absolute_open = ear >= max(
+            self.ear_blink_open_threshold,
+            baseline - max(0.018, (baseline - self.ear_blink_close_threshold) * 0.45),
+        )
+        return absolute_open or recovery >= recovery_target
+
+    def _detect_blink(
+        self,
+        left_ear: float,
+        right_ear: float,
+        blink_ear: float,
+        now: float | None = None,
+    ) -> bool:
+        now = monotonic() if now is None else now
+        close_threshold = self._dynamic_close_threshold()
+        both_closed = left_ear < close_threshold and right_ear < close_threshold
+
+        if not self._currently_blinking and both_closed:
+            self._close_frame_streak += 1
+        else:
+            self._close_frame_streak = 0
+
+        if not self._currently_blinking:
+            if not both_closed:
+                self._open_ear_samples.append(blink_ear)
+
+        if self._currently_blinking:
+            self._blink_trough = min(self._blink_trough, blink_ear)
+            if self._eyes_reopened(blink_ear) or now - self._blink_started_at > 0.35:
+                self._currently_blinking = False
+                self._close_frame_streak = 0
+                if blink_ear >= close_threshold * 0.9:
+                    self._open_ear_samples.append(blink_ear)
+        elif (
+            both_closed
+            and self._close_frame_streak >= 2
+            and self._can_register_blink(left_ear, right_ear, blink_ear, close_threshold)
+        ):
+            self._currently_blinking = True
+            self._blink_trough = blink_ear
+            self._blink_started_at = now
             self.blink_counter += 1
             self.blink_timestamps.append(now)
+            self._close_frame_streak = 0
 
-        self._currently_blinking = is_closed
         self._prune_old(self.blink_timestamps, now)
-        return is_closed
+        return self._currently_blinking
 
     def _estimate_head_yaw(self, landmarks: Sequence[Any]) -> float:
         nose = landmarks[self.NOSE_TIP]
@@ -127,8 +236,11 @@ class StateEstimator:
             return 0.0
 
         face_center_y = (forehead.y + chin.y) / 2.0
-        normalized_offset = (nose.y - face_center_y) / face_height
-        return float(np.clip(normalized_offset * 60.0, -30.0, 30.0))
+        nose_offset = (nose.y - face_center_y) / face_height
+        eye_y = float(np.mean([landmarks[index].y for index in self.LEFT_EYE + self.RIGHT_EYE]))
+        eye_offset = (eye_y - face_center_y) / face_height
+        combined = nose_offset * 0.45 + eye_offset * 0.55
+        return float(np.clip(combined * 70.0, -35.0, 35.0))
 
     def _estimate_gaze(self, landmarks: Sequence[Any]) -> tuple[float, float]:
         left_x, left_y = self._eye_gaze_offset(landmarks, self.LEFT_EYE, self.LEFT_IRIS)
@@ -160,7 +272,7 @@ class StateEstimator:
         return float(gaze_x), float(gaze_y)
 
     def _gaze_direction(self, gaze_x: float, gaze_y: float) -> str:
-        threshold = self.distracted_gaze_threshold * 0.65
+        threshold = self.gaze_label_threshold
         horizontal = "center"
         vertical = "center"
 
@@ -197,8 +309,10 @@ class StateEstimator:
         if (
             abs(head_yaw) >= self.distracted_yaw_threshold
             or abs(head_pitch) >= self.distracted_pitch_threshold
+            or head_pitch <= -self.distracted_pitch_up_threshold
             or abs(gaze_x) >= self.distracted_gaze_threshold
-            or abs(gaze_y) >= self.distracted_gaze_threshold
+            or gaze_y >= self.distracted_gaze_threshold
+            or gaze_y <= -self.distracted_gaze_up_threshold
         ):
             return State.DISTRACTED
 
@@ -233,6 +347,19 @@ class StateEstimator:
         self._prune_old(self.blink_timestamps, now)
         elapsed = max(10.0, min(self.history_seconds, now - self._started_at))
         return float(len(self.blink_timestamps) * 60.0 / elapsed)
+
+    def distraction_score(self, signals: dict[str, Any]) -> int:
+        """Head pose weighs more than gaze so screen-corner glances stay sub-distracted."""
+        head_component = max(
+            abs(signals["head_yaw"]) / self.distracted_yaw_threshold,
+            abs(signals["head_pitch"]) / self.distracted_pitch_threshold,
+        )
+        gaze_component = max(
+            abs(signals["gaze_x"]) / self.gaze_meter_threshold,
+            max(signals["gaze_y"], 0.0) / self.gaze_meter_threshold,
+            max(-signals["gaze_y"], 0.0) / self.distracted_gaze_up_threshold,
+        ) * 0.55
+        return int(np.clip(max(head_component, gaze_component) * 100, 0, 100))
 
     def _estimate_confidence(
         self,
