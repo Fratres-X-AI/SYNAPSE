@@ -1,6 +1,7 @@
 mediapipe==0.10.21
 numpy<2
 opencv-python
+pillow
 
 # Optional (launcher tray + Windows packaging) — see requirements-dev.txt
 # pystray

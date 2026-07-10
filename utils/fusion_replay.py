@@ -22,13 +22,6 @@ PLAYBACK_FPS = 24
 TIMELINE_HEIGHT = 72
 TIMELINE_MODES = ["state", "profile", "engagement"]
 
-PHASE_COLORS = {
-    "neutral": (200, 200, 200),
-    "happy": (0, 220, 0),
-    "sad": (255, 120, 0),
-    "mad": (0, 0, 255),
-}
-
 
 def alert_log_path_for(session_path: Path) -> Path:
     return session_path.parent / f"{session_path.stem}.alerts.csv"
@@ -183,8 +176,9 @@ def draw_replay_overlay(
     has_labeled_phase: bool = False,
     has_active_alerts: bool = False,
 ):
-    y = frame.shape[0] - timeline_height - 90
-    for line in _overlay_lines(
+    from src.visualization.hud_text import draw_hud_text
+
+    lines = _overlay_lines(
         row,
         title,
         index,
@@ -192,10 +186,11 @@ def draw_replay_overlay(
         paused,
         has_labeled_phase=has_labeled_phase,
         has_active_alerts=has_active_alerts,
-    ):
-        cv2.putText(frame, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (240, 240, 240), 2, cv2.LINE_AA)
-        y += 24
+    )
+    y = frame.shape[0] - timeline_height - 88
+    for line in lines:
+        draw_hud_text(frame, line, (16, y), size=12)
+        y += 16
     return frame
 
 
@@ -254,14 +249,10 @@ def replay_fusion_rows(
         print(f"Loaded {len(alert_rows)} alert marker(s) from {alert_path.name}")
 
     while True:
-        frame = np.zeros((FRAME_SIZE[1], FRAME_SIZE[0], 3), dtype=np.uint8)
+        frame = np.full((FRAME_SIZE[1], FRAME_SIZE[0], 3), (248, 246, 240), dtype=np.uint8)
         row = rows[index]
         fusion = row_builder(row, estimator)
         ear_history.append(float(row["ear"]))
-
-        border_label = row.get("labeled_phase") or row.get("profile_phase", "")
-        color = PHASE_COLORS.get(border_label, (90, 90, 90))
-        cv2.rectangle(frame, (0, 0), (frame.shape[1] - 1, frame.shape[0] - 1), color, 8)
 
         frame = render_fusion_dashboard(frame, fusion, ear_history, estimator)
         frame = draw_replay_overlay(

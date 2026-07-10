@@ -2,27 +2,28 @@ import csv
 from pathlib import Path
 
 import cv2
-import numpy as np
+
+from src.visualization.hud_text import HUD_ACCENT, HUD_DIM, draw_hud_text
 
 STATE_COLORS = {
-    "high_attention": (80, 220, 100),
-    "moderate": (0, 220, 255),
-    "fatigued": (0, 140, 255),
-    "distracted": (60, 60, 255),
+    "high_attention": (62, 128, 52),
+    "moderate": (168, 128, 58),
+    "fatigued": (48, 158, 210),
+    "distracted": (42, 52, 198),
 }
 
 PROFILE_COLORS = {
-    "neutral": (200, 200, 200),
-    "happy": (0, 220, 0),
-    "sad": (255, 120, 0),
-    "mad": (0, 0, 255),
+    "neutral": (170, 165, 158),
+    "happy": (62, 128, 52),
+    "sad": (48, 158, 210),
+    "mad": (42, 52, 198),
 }
 
 ALERT_COLORS = {
-    "low_engagement": (0, 120, 255),
-    "high_distraction": (0, 0, 255),
-    "fatigue_spike": (0, 180, 255),
-    "high_tension": (180, 0, 255),
+    "low_engagement": (48, 158, 210),
+    "high_distraction": (42, 52, 198),
+    "fatigue_spike": (50, 140, 210),
+    "high_tension": (100, 80, 170),
 }
 
 
@@ -33,11 +34,15 @@ def load_session_rows(path: Path) -> list[dict]:
 
 def _segment_color(row: dict, mode: str) -> tuple[int, int, int]:
     if mode == "profile":
-        return PROFILE_COLORS.get(row.get("profile_phase", ""), (90, 90, 90))
+        return PROFILE_COLORS.get(row.get("profile_phase", ""), (190, 186, 176))
     if mode == "engagement":
         value = float(row.get("engagement", 0.0))
-        return (0, int(180 + value * 75), int(80 + (1 - value) * 80))
-    return STATE_COLORS.get(row.get("state", ""), (90, 90, 90))
+        return (
+            int(70 + (1 - value) * 60),
+            int(120 + value * 80),
+            int(50 + value * 40),
+        )
+    return STATE_COLORS.get(row.get("state", ""), (190, 186, 176))
 
 
 def draw_timeline_bar(
@@ -51,51 +56,50 @@ def draw_timeline_bar(
 ):
     x, y = origin
     width, height = size
-    panel = frame[y : y + height, x : x + width].copy()
-    panel[:] = (15, 15, 15)
-    cv2.rectangle(panel, (0, 0), (width - 1, height - 1), (60, 60, 60), 1)
-    cv2.putText(panel, f"TIMELINE ({mode})", (8, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (220, 220, 220), 1)
+    draw_hud_text(frame, f"TL {mode}", (x + 8, y + 2), size=10, label=True)
 
     if not rows:
-        frame[y : y + height, x : x + width] = panel
         return frame
 
-    bar_top = 24
-    bar_bottom = height - 18
-    bar_left = 8
-    bar_right = width - 8
+    bar_top = y + 16
+    bar_bottom = y + height - 10
+    bar_left = x + 8
+    bar_right = x + width - 8
     bar_width = bar_right - bar_left
     total = len(rows)
 
+    cv2.line(frame, (bar_left, bar_top), (bar_right, bar_top), HUD_DIM, 1, cv2.LINE_AA)
+    cv2.line(frame, (bar_left, bar_bottom), (bar_right, bar_bottom), HUD_DIM, 1, cv2.LINE_AA)
     for index, row in enumerate(rows):
         x1 = bar_left + int(index * bar_width / total)
         x2 = bar_left + int((index + 1) * bar_width / total)
         color = _segment_color(row, mode)
-        cv2.rectangle(panel, (x1, bar_top), (max(x2, x1 + 1), bar_bottom), color, -1)
+        cv2.rectangle(frame, (x1, bar_top + 1), (max(x2, x1 + 1), bar_bottom - 1), color, -1)
 
     cursor_x = bar_left + int(current_index * bar_width / max(total - 1, 1))
-    cv2.line(panel, (cursor_x, bar_top - 2), (cursor_x, bar_bottom + 2), (255, 255, 255), 2)
+    cv2.line(frame, (cursor_x, bar_top - 2), (cursor_x, bar_bottom + 2), HUD_ACCENT, 2, cv2.LINE_AA)
 
     if alert_rows:
         duration = float(rows[-1]["elapsed_sec"]) - float(rows[0]["elapsed_sec"])
         duration = max(duration, 1.0)
         for alert in alert_rows:
             rule = alert.get("rule_id", "")
-            color = ALERT_COLORS.get(rule, (255, 255, 255))
+            color = ALERT_COLORS.get(rule, HUD_ACCENT)
             at = float(alert.get("elapsed_sec", 0.0)) - float(rows[0]["elapsed_sec"])
             mark_x = bar_left + int((at / duration) * bar_width)
-            cv2.line(panel, (mark_x, bar_top - 4), (mark_x, bar_bottom + 4), color, 2)
+            cv2.line(frame, (mark_x, bar_top - 4), (mark_x, bar_bottom + 4), color, 2, cv2.LINE_AA)
 
     progress = (current_index + 1) / total
-    cv2.rectangle(panel, (bar_left, height - 12), (bar_right, height - 4), (40, 40, 40), -1)
-    cv2.rectangle(
-        panel,
-        (bar_left, height - 12),
-        (bar_left + int((bar_right - bar_left) * progress), height - 4),
-        (0, 200, 255),
-        -1,
+    py = y + height - 4
+    cv2.line(frame, (bar_left, py), (bar_right, py), HUD_DIM, 1, cv2.LINE_AA)
+    cv2.line(
+        frame,
+        (bar_left, py),
+        (bar_left + int((bar_right - bar_left) * progress), py),
+        HUD_ACCENT,
+        2,
+        cv2.LINE_AA,
     )
-    frame[y : y + height, x : x + width] = panel
     return frame
 
 

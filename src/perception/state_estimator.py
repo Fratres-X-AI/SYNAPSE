@@ -5,6 +5,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from src.cognition.cognitive_state import CognitiveState, State
+from src.perception.face_geometry import compute_hairline, compute_peripheral_mesh
 
 
 class StateEstimator:
@@ -82,6 +83,8 @@ class StateEstimator:
         head_pitch = self._estimate_head_pitch(landmarks)
         gaze_x, gaze_y = self._estimate_gaze(landmarks)
         gaze_direction = self._gaze_direction(gaze_x, gaze_y)
+        hairline = compute_hairline(landmarks)
+        peripheral = compute_peripheral_mesh(landmarks)
 
         self._append_history(self.ear_history, ear, now)
         self._append_history(self.head_yaw_history, head_yaw, now)
@@ -108,6 +111,13 @@ class StateEstimator:
                 "gaze_x": gaze_x,
                 "gaze_y": gaze_y,
                 "gaze_direction": gaze_direction,
+                "hairline_x": hairline.x,
+                "hairline_y": hairline.y,
+                "eye_to_hairline": hairline.eye_to_hairline,
+                "chin_to_hairline": hairline.chin_to_hairline,
+                "brow_to_hairline": hairline.brow_to_hairline,
+                "ear_to_hairline": (hairline.left_ear_to_hairline + hairline.right_ear_to_hairline) / 2.0,
+                "peripheral_landmarks": peripheral.point_count,
             },
         )
 
@@ -122,13 +132,8 @@ class StateEstimator:
         return left_ear, right_ear, float(min(left_ear, right_ear))
 
     def _face_tracking_stable(self, landmarks: Sequence[Any]) -> bool:
-        left_face = landmarks[self.LEFT_FACE]
-        right_face = landmarks[self.RIGHT_FACE]
-        forehead = landmarks[self.FOREHEAD]
-        chin = landmarks[self.CHIN]
-        face_width = abs(right_face.x - left_face.x)
-        face_height = abs(chin.y - forehead.y)
-        return face_width > 0.08 and face_height > 0.12
+        hairline = compute_hairline(landmarks)
+        return hairline.face_width > 0.08 and hairline.chin_to_hairline > 0.12
 
     def _handle_occlusion(self, ear: float) -> bool:
         self._close_frame_streak = 0
@@ -232,14 +237,14 @@ class StateEstimator:
 
     def _estimate_head_pitch(self, landmarks: Sequence[Any]) -> float:
         nose = landmarks[self.NOSE_TIP]
-        forehead = landmarks[self.FOREHEAD]
         chin = landmarks[self.CHIN]
+        hairline = compute_hairline(landmarks)
 
-        face_height = abs(chin.y - forehead.y)
+        face_height = hairline.chin_to_hairline
         if face_height == 0:
             return 0.0
 
-        face_center_y = (forehead.y + chin.y) / 2.0
+        face_center_y = (hairline.y + chin.y) / 2.0
         nose_offset = (nose.y - face_center_y) / face_height
         eye_y = float(np.mean([landmarks[index].y for index in self.LEFT_EYE + self.RIGHT_EYE]))
         eye_offset = (eye_y - face_center_y) / face_height

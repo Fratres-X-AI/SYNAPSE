@@ -228,16 +228,6 @@ def main() -> None:
                         2,
                         cv2.LINE_AA,
                     )
-                if fusion and active_alerts:
-                    cv2.putText(
-                        frame,
-                        f"ALERT WATCH: {active_alerts[:60]}",
-                        (16, frame.shape[0] - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.42,
-                        (0, 140, 255),
-                        1,
-                    )
                 display.show(frame, fusion.cognitive if fusion else None, agent.autonomy_level)
 
                 if fusion and now - last_summary_at >= SUMMARY_EVERY_SECONDS:

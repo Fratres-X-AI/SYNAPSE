@@ -3,6 +3,8 @@ import sys
 import cv2
 
 from src.cognition.cognitive_state import State
+from src.visualization.hud_text import HUD_ACCENT, HUD_LABEL, draw_hud_text
+from src.visualization.instrument_theme import CAUTION, STATE_COLORS, WARN
 
 STATE_MESSAGES = {
     State.HIGH_ATTENTION: "Locked in - higher autonomy",
@@ -11,12 +13,7 @@ STATE_MESSAGES = {
     State.DISTRACTED: "Distracted - autonomy reduced",
 }
 
-STATE_ALERT_COLORS = {
-    State.HIGH_ATTENTION: (80, 220, 100),
-    State.MODERATE: (0, 220, 255),
-    State.FATIGUED: (0, 140, 255),
-    State.DISTRACTED: (80, 80, 255),
-}
+STATE_ALERT_COLORS = STATE_COLORS
 
 
 class StateAlertTracker:
@@ -84,33 +81,10 @@ def draw_alert_banner(frame, message: str, state: State | None = None):
         return frame
 
     height, width = frame.shape[:2]
-    color = STATE_ALERT_COLORS.get(state, (255, 255, 255)) if state else (255, 255, 255)
-    banner_height = 54
-    y1 = height // 2 - banner_height // 2
-    y2 = y1 + banner_height
-
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (0, y1), (width, y2), (10, 10, 10), -1)
-    frame[:] = cv2.addWeighted(overlay, 0.72, frame, 0.28, 0)
-
-    cv2.putText(
-        frame,
-        message,
-        (24, y1 + 36),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.85,
-        (0, 0, 0),
-        4,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        message,
-        (24, y1 + 36),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.85,
-        color,
-        2,
-        cv2.LINE_AA,
-    )
+    accent = STATE_ALERT_COLORS.get(state, CAUTION) if state else CAUTION
+    y = height // 2
+    draw_hud_text(frame, message.upper(), (24, y - 8), size=14, color=HUD_LABEL, label=True)
+    cv2.line(frame, (20, y + 12), (width - 20, y + 12), accent, 2, cv2.LINE_AA)
+    if state == State.DISTRACTED:
+        draw_hud_text(frame, "CAUTION", (width - 100, y - 8), size=12, color=WARN, label=True)
     return frame
