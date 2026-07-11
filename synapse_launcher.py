@@ -10,6 +10,7 @@ from pathlib import Path
 
 from utils.app_paths import data_inventory, delete_all_user_data
 from utils.privacy import ensure_privacy_consent
+from utils.product import PRODUCT_NAME, VERSION
 from utils.settings import UserSettings, load_settings, save_settings
 
 ROOT = Path(__file__).resolve().parent
@@ -34,10 +35,53 @@ SCRIPT_MODULES = {
     "synapse_pilot_summary.py": "synapse_pilot_summary",
 }
 UTILITY_COMMANDS = {"first-run", "privacy", "data", "delete-data", "settings"}
+RETURN_HOME_FLAG = "--return-home"
+
+
+def setup_entry() -> tuple[str, str]:
+    """Return tray/home label and launcher command for first-time or repeat setup."""
+    from utils.user_profiles import user_is_configured
+
+    if user_is_configured():
+        return "Recalibrate", "onboard"
+    return "Get Started", "first-run"
 
 
 def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
+
+
+def wants_return_home(extra_args: list[str] | None = None) -> bool:
+    return RETURN_HOME_FLAG in (extra_args or sys.argv[1:])
+
+
+def relaunch_home() -> None:
+    if is_frozen():
+        subprocess.Popen([sys.executable, "home"], cwd=ROOT)
+        return
+
+    launcher = ROOT / "synapse_launcher.py"
+    if not launcher.exists():
+        return
+    subprocess.Popen([sys.executable, str(launcher), "home"], cwd=ROOT)
+
+
+def ensure_cli_console(command: str | None) -> None:
+    """Attach a console for frozen windowed builds running CLI subcommands."""
+    if not is_frozen() or not command or command == "home":
+        return
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        if ctypes.windll.kernel32.GetConsoleWindow():
+            return
+        ctypes.windll.kernel32.AllocConsole()
+        sys.stdout = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
+        sys.stderr = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
+    except OSError:
+        pass
 
 
 def run_frozen_module(module_name: str, argv0: str, extra_args: list[str]) -> int:
@@ -63,12 +107,12 @@ def run_frozen_module(module_name: str, argv0: str, extra_args: list[str]) -> in
     finally:
         sys.argv = previous_argv
 
-DESCRIPTION = """\
-Synapse cognitive monitoring launcher.
+DESCRIPTION = f"""\
+{PRODUCT_NAME} v{VERSION} — cognitive monitoring launcher.
 
 Commands:
   home      Open graphical launcher shell
-  first-run Run privacy notice, onboarding, then first monitor session
+  first-run Privacy, onboarding, then home (or monitor from CLI)
   onboard   Run unified onboarding wizard (calibration + emotion profile)
   monitor   Start production monitor mode
   showcase  Demo mode with elite landmark shell + flight HUD
@@ -132,6 +176,8 @@ def run_utility(command: str, extra_args: list[str]) -> int:
         onboard_code = run_command("onboard", extra_args)
         if onboard_code != 0:
             return onboard_code
+        if wants_return_home(extra_args):
+            return 0
         return run_command("monitor", extra_args)
 
     if command == "privacy":
@@ -254,10 +300,10 @@ def run_tray() -> int:
 
         return _action
 
+    setup_label, setup_command = setup_entry()
     menu = pystray.Menu(
         pystray.MenuItem("Home", launch("home")),
-        pystray.MenuItem("First Run", launch("first-run")),
-        pystray.MenuItem("Onboard", launch("onboard")),
+        pystray.MenuItem(setup_label, launch(setup_command)),
         pystray.MenuItem("Monitor", launch("monitor")),
         pystray.MenuItem("Showcase", launch("showcase")),
         pystray.MenuItem("Replay (latest)", launch("replay")),
@@ -307,6 +353,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_tray()
 
     if args.command:
+        ensure_cli_console(args.command)
         return run_command(
             args.command,
             command_argv(args.command, extra, args.fullscreen),

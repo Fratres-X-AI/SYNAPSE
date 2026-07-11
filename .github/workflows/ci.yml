@@ -41,10 +41,15 @@ jobs:
               "src.perception.face_geometry",
               "src.perception.presence_detector",
               "src.perception.shoulder_tracker",
+              "src.ui.dialogs",
+              "src.ui.theme",
               "src.visualization.instrument_layout",
               "src.visualization.landmark_overlay",
               "src.visualization.presence_overlay",
               "utils.fusion_summary",
+              "utils.onboarding_progress",
+              "utils.product",
+              "utils.user_profiles",
           ):
               importlib.import_module(module_name)
           PY

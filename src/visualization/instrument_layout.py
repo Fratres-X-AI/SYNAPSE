@@ -47,7 +47,7 @@ class LayoutMetrics:
     top: int = 34
     margin: int = 12
     left_w: int = 158
-    right_w: int = 108
+    right_w: int = 88
 
     @property
     def left_x(self) -> int:
@@ -80,8 +80,7 @@ def draw_annunciator(
 ) -> None:
     draw_annunciator_strip(frame, state, flash=flash)
     if subtitle:
-        tw = text_width(subtitle, size=11)
-        draw_hud_text(frame, subtitle, (frame.shape[1] - tw - 12, 10), size=11, color=HUD_DIM)
+        draw_hud_text(frame, subtitle, (12, frame.shape[0] - 18), size=10, color=HUD_DIM)
 
 
 def _draw_mini_gauge(
@@ -183,58 +182,41 @@ def draw_right_stack(
     quality_message: str = "",
     quality_color: tuple[int, int, int] | None = None,
 ) -> None:
+    del fusion, quality_message, quality_color
     x = layout.right_x
     y = layout.content_top
-    panel_w = layout.right_w + 8
-    header_h = 16
-    instrument_h = 58
-    footer_h = 16
-    stack_h = header_h + instrument_h + footer_h + 8
-    _draw_glass_backplate(frame, x - 6, y - 4, panel_w, stack_h)
+    panel_w = layout.right_w + 4
+    instrument_h = 52
+    stack_h = instrument_h + 6
+    _draw_glass_backplate(frame, x - 4, y - 2, panel_w, stack_h, alpha=0.28)
 
-    if quality_message:
-        qw = text_width(quality_message, size=9, label=True)
-        draw_hud_text(
-            frame,
-            quality_message,
-            (x + max(0, (panel_w - qw) // 2) - 6, y),
-            size=9,
-            color=quality_color or SAFE,
-            label=True,
-        )
-
-    row_y = y + header_h
-    compass_r = 26
+    row_y = y + 2
+    compass_r = 22
     draw_gaze_compass(
         frame,
         cognitive.signals["gaze_x"],
         cognitive.signals["gaze_y"],
-        (x + 2, row_y),
+        (x, row_y),
         radius=compass_r,
     )
-    tape_x = x + 2 + compass_r * 2 + 10
+    tape_x = x + compass_r * 2 + 8
     draw_vertical_tape(
         frame,
         (tape_x, row_y),
-        (34, instrument_h),
+        (28, instrument_h),
         distraction,
-        label="DRF",
+        label="",
         compact=True,
     )
 
-    stat_y = row_y + instrument_h + 6
-    stab = int(max(0.0, min(1.0, cognitive.confidence)) * 100)
-    stats = f"STAB {stab:03d}"
-    if fps is not None and fps > 0:
-        stats = f"{stats}  FPS {fps:4.0f}"
-    sw = text_width(stats, size=10)
-    draw_hud_text(
-        frame,
-        stats,
-        (x + max(0, (panel_w - sw) // 2) - 6, stat_y),
-        size=10,
-        color=HUD_DIM,
-    )
+    if fps is not None and 0 < fps < 18:
+        draw_hud_text(
+            frame,
+            f"{fps:.0f} FPS",
+            (x, row_y + instrument_h + 2),
+            size=9,
+            color=HUD_DIM,
+        )
 
 
 def render_instrument_hud(

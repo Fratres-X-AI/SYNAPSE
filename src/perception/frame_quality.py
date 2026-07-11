@@ -23,5 +23,4 @@ def assess_frame_quality(frame, *, face_detected: bool) -> tuple[str, tuple[int,
 def draw_quality_pill(frame, message: str, color: tuple[int, int, int]) -> None:
     from src.visualization.hud_text import draw_hud_text
 
-    width = frame.shape[1]
-    draw_hud_text(frame, message, (width - 108, 36), size=10, color=color, label=True)
+    draw_hud_text(frame, message, (12, frame.shape[0] - 36), size=10, color=color, label=True)

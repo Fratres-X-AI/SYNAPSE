@@ -30,6 +30,11 @@ if ($help.Output -notmatch "showcase") {
     Write-Host $help.Output
     exit 1
 }
+if ($help.Output -notmatch "0\.3\.0") {
+    Write-Host "Help output missing version string." -ForegroundColor Red
+    Write-Host $help.Output
+    exit 1
+}
 Write-Host "[ok] --help" -ForegroundColor Green
 
 $data = Invoke-Synapse -CommandArgs @("data")

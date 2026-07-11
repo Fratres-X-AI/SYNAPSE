@@ -14,7 +14,7 @@ from src.monitoring.alert_rules import MonitorAlertEngine
 from src.monitoring.presence_logger import PresenceEventLogger
 from src.perception.capture import CameraCapture
 from src.perception.emotion_estimator import EmotionEstimator
-from src.perception.frame_quality import assess_frame_quality
+from src.perception.frame_quality import assess_frame_quality, draw_quality_pill
 from src.perception.presence_detector import PresenceTracker, display_label
 from src.perception.state_estimator import StateEstimator
 from src.visualization.alerts import StateAlertTracker
@@ -23,6 +23,7 @@ from src.visualization.debrief import run_session_debrief
 from src.visualization.display_adapter import create_display_adapter
 from src.visualization.landmark_overlay import draw_all_tracking_overlays
 from src.visualization.monitor_hud import (
+    PresenceNoteTracker,
     RuleBannerTracker,
     SmokingBannerTracker,
     VisitorBannerTracker,
@@ -36,6 +37,7 @@ from utils.emotion_profile import EmotionProfile, load_emotion_profile
 from utils.fps_tracker import FpsTracker
 from utils.manager_report import write_manager_report
 from utils.privacy import ensure_privacy_consent
+from utils.user_profiles import get_active_user_display_name, record_session
 from utils.settings import load_settings
 
 SUMMARY_EVERY_SECONDS = 30
@@ -46,15 +48,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fullscreen", action="store_true", help="Start fullscreen (F to toggle)")
     parser.add_argument("--skip-debrief", action="store_true", help="Close without post-session debrief")
     parser.add_argument("--debrief", action="store_true", help="Show post-session debrief on exit")
+    parser.add_argument(
+        RETURN_HOME_FLAG,
+        action="store_true",
+        dest="return_home",
+        help="Return to the graphical home menu after the session",
+    )
     return parser.parse_args()
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
     config = Config(fullscreen=args.fullscreen)
     settings = load_settings()
     if not ensure_privacy_consent():
-        return
+        return 1
 
     config.session_dir.mkdir(parents=True, exist_ok=True)
     deleted = cleanup_old_data(settings.retention_days)
@@ -69,8 +77,13 @@ def main() -> None:
     try:
         camera = CameraCapture(camera_index=config.camera_index, detect_presence=True)
     except RuntimeError as error:
-        print(f"Camera error: {error}")
-        return
+        try:
+            from src.ui.dialogs import show_camera_error
+
+            show_camera_error(str(error))
+        except Exception:
+            print(f"Camera error: {error}")
+        return 1
     estimator = StateEstimator(**config.estimator_kwargs())
     emotion_estimator = EmotionEstimator(calibration_frames=0)
     if profile.has_neutral():
@@ -94,6 +107,7 @@ def main() -> None:
     visitor_banner = VisitorBannerTracker()
     rule_banner = RuleBannerTracker()
     smoking_banner = SmokingBannerTracker()
+    presence_note = PresenceNoteTracker()
     show_landmarks = False
     started_at = monotonic()
     last_summary_at = started_at
@@ -292,8 +306,11 @@ def main() -> None:
                     camera.last_shoulder_sample,
                     fusion,
                     agent.autonomy_level if fusion else None,
+                    note_tracker=presence_note,
                 )
                 quality_message, quality_color = assess_frame_quality(frame, face_detected=face_detected)
+                if quality_message == "QUALITY OK":
+                    quality_message = ""
                 frame = render_fusion_dashboard(
                     frame,
                     fusion,
@@ -306,6 +323,8 @@ def main() -> None:
                     quality_message=quality_message,
                     quality_color=quality_color,
                 )
+                if quality_message:
+                    draw_quality_pill(frame, quality_message, quality_color)
                 if landmarks is None:
                     cv2.putText(
                         frame,
@@ -343,23 +362,43 @@ def main() -> None:
             elapsed = monotonic() - started_at
             print(f"\nMonitor ended after {elapsed:.0f}s")
             print(f"Session saved to {log_path}")
+            report_text = ""
+            report_path = log_path.with_suffix(".report.txt")
             if log_path.stat().st_size > 120:
-                report = write_manager_report(
+                report_text = write_manager_report(
                     log_path,
                     alert_flags=monitor_alerts.summary_flags(),
                     export_desktop=settings.export_reports_to_desktop,
                 )
-                print("\n" + report)
-                print(f"\nReport saved to {log_path.with_suffix('.report.txt')}")
+                print("\n" + report_text)
+                print(f"\nReport saved to {report_path}")
                 if settings.export_reports_to_desktop:
                     print("Copy exported to Desktop: Synapse_Report_*.txt")
-            if args.debrief and not args.skip_debrief and log_path.stat().st_size > 120:
+            record_session(session_name, duration_seconds=elapsed)
+            return_home = args.return_home or wants_return_home()
+            if return_home or not args.skip_debrief:
+                try:
+                    from src.ui.dialogs import show_session_summary
+
+                    if show_session_summary(
+                        profile_name=get_active_user_display_name(),
+                        duration_seconds=elapsed,
+                        report_text=report_text,
+                        report_path=report_path if report_text else None,
+                        return_home=return_home,
+                    ):
+                        relaunch_home()
+                except Exception:
+                    if return_home:
+                        relaunch_home()
+            elif args.debrief and not args.skip_debrief and log_path.stat().st_size > 120:
                 run_session_debrief(
                     log_path,
                     alert_csv=alert_log_path,
                     presence_log=presence_log_path,
                 )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

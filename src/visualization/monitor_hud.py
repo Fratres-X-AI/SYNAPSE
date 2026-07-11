@@ -32,6 +32,37 @@ class SmokingBannerTracker:
 
 
 @dataclass
+class PresenceNoteTracker:
+    """Hold phone/smoking subtitle labels so brief detections stay readable."""
+
+    hold_frames: int = 150
+    _phone_frames: int = 0
+    _smoking_frames: int = 0
+
+    def tick(self, presence: PresenceFrame | None) -> str:
+        if presence is not None:
+            active = presence.active_labels()
+            if "phone" in active:
+                self._phone_frames = self.hold_frames
+            if "smoking" in active:
+                self._smoking_frames = self.hold_frames
+
+        labels: list[str] = []
+        if self._phone_frames > 0:
+            self._phone_frames -= 1
+            labels.append("phone")
+        if self._smoking_frames > 0:
+            self._smoking_frames -= 1
+            labels.append("smoking")
+
+        if not labels:
+            return ""
+        from src.perception.presence_detector import display_label
+
+        return " | ".join(display_label(label) for label in labels)
+
+
+@dataclass
 class VisitorBannerTracker:
     hold_frames: int = 90
     _frames_left: int = 0
@@ -102,12 +133,10 @@ def build_monitor_subtitle(
     shoulder: ShoulderSample | None,
     fusion: FusionState | None,
     autonomy: float | None,
+    *,
+    note_tracker: PresenceNoteTracker | None = None,
 ) -> str:
-    del fusion, autonomy
-    parts: list[str] = []
-    presence_note = presence_hud_note(presence, monitor=True)
-    if presence_note:
-        parts.append(presence_note)
-    if shoulder is not None and shoulder.visible:
-        parts.append(shoulder.hud_text())
-    return " | ".join(parts)
+    del shoulder, fusion, autonomy
+    if note_tracker is not None:
+        return note_tracker.tick(presence)
+    return presence_hud_note(presence)

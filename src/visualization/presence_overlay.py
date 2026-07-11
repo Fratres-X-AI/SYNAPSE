@@ -18,8 +18,9 @@ OBJECT_COLOR = (188, 210, 228)
 SMOKING_COLOR = (96, 96, 255)
 
 _HIDDEN_BOX_LABELS = frozenset({"user", "hand"})
-_MONITOR_HUD_LABELS = frozenset({"phone", "smoking", "person"})
-_MONITOR_BOX_LABELS = frozenset({"phone", "person"})
+_USER_HIDDEN_LABELS = frozenset({"user", "hand", "person"})
+_HUD_NOTE_LABELS = frozenset({"phone", "smoking"})
+_MONITOR_BOX_LABELS = frozenset({"phone"})
 
 
 def _primary_person(presence: PresenceFrame) -> PresenceBox | None:
@@ -140,11 +141,10 @@ def draw_presence_overlay(
 
 
 def presence_hud_note(presence: PresenceFrame | None, *, monitor: bool = False) -> str:
+    del monitor
     if presence is None:
         return ""
-    labels = presence.active_labels()
-    if monitor:
-        labels = {label for label in labels if label in _MONITOR_HUD_LABELS}
+    labels = {label for label in presence.active_labels() if label in _HUD_NOTE_LABELS}
     if not labels:
         return ""
     return " | ".join(display_label(label) for label in sorted(labels))

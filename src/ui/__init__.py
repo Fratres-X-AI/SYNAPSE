@@ -1,0 +1,1 @@
+"""Synapse graphical UI helpers."""

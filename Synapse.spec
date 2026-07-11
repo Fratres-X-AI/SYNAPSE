@@ -62,6 +62,11 @@ hiddenimports = [
     "utils.pilot_report",
     "utils.privacy",
     "utils.settings",
+    "utils.user_profiles",
+    "utils.product",
+    "utils.onboarding_progress",
+    "src.ui.theme",
+    "src.ui.dialogs",
 ]
 
 tmp_ret = collect_all("mediapipe")
@@ -100,7 +105,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

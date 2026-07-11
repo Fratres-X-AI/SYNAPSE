@@ -1,5 +1,6 @@
 from src.perception.presence_detector import PresenceBox, PresenceFrame
 from src.visualization.monitor_hud import (
+    PresenceNoteTracker,
     RuleBannerTracker,
     SmokingBannerTracker,
     VisitorBannerTracker,
@@ -94,3 +95,20 @@ def test_build_monitor_subtitle_is_compact_for_pilot():
     assert subtitle == "Phone"
     assert "PHASE" not in subtitle
     assert "AUT" not in subtitle
+
+
+def test_presence_note_tracker_holds_smoking_after_brief_event():
+    tracker = PresenceNoteTracker(hold_frames=3)
+    smoking = PresenceFrame(events=("smoking",))
+    phone = PresenceFrame(
+        objects=(PresenceBox("phone", 0.42, 0.45, 0.5, 0.62, 0.7),),
+        events=("smoking",),
+    )
+
+    assert tracker.tick(smoking) == "Smoking"
+    assert tracker.tick(None) == "Smoking"
+    assert tracker.tick(None) == "Smoking"
+    assert tracker.tick(None) == ""
+
+    assert tracker.tick(phone) == "Phone | Smoking"
+    assert tracker.tick(None) == "Phone | Smoking"

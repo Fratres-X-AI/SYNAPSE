@@ -5,7 +5,6 @@ from pathlib import Path
 from utils.app_paths import calibration_path
 
 LEGACY_CALIBRATION_PATH = Path("calibration.json")
-DEFAULT_CALIBRATION_PATH = calibration_path()
 
 
 @dataclass
@@ -25,14 +24,18 @@ class CalibrationProfile:
         return asdict(self)
 
 
-def save_calibration(profile: CalibrationProfile, path: Path = DEFAULT_CALIBRATION_PATH) -> None:
+def save_calibration(profile: CalibrationProfile, path: Path | None = None) -> None:
+    if path is None:
+        path = calibration_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(profile), indent=2), encoding="utf-8")
 
 
-def load_calibration(path: Path = DEFAULT_CALIBRATION_PATH) -> CalibrationProfile | None:
+def load_calibration(path: Path | None = None) -> CalibrationProfile | None:
+    if path is None:
+        path = calibration_path()
     if not path.exists():
-        if path == DEFAULT_CALIBRATION_PATH and LEGACY_CALIBRATION_PATH.exists():
+        if LEGACY_CALIBRATION_PATH.exists():
             path = LEGACY_CALIBRATION_PATH
         else:
             return None

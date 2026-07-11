@@ -48,7 +48,7 @@ def test_draw_presence_overlay_skips_user_and_hand_boxes():
     assert result[216, 288].sum() != 0
 
 
-def test_presence_hud_note_lists_identified_labels():
+def test_presence_hud_note_lists_actionable_labels_only():
     presence = PresenceFrame(
         people=(
             PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),
@@ -60,12 +60,12 @@ def test_presence_hud_note_lists_identified_labels():
 
     note = presence_hud_note(presence)
 
-    assert "User" in note
-    assert "Person" in note
-    assert "Phone" in note
+    assert note == "Phone"
+    assert "User" not in note
+    assert "Person" not in note
 
 
-def test_presence_hud_note_monitor_mode_hides_user_and_shows_phone_only():
+def test_presence_hud_note_includes_smoking_event():
     presence = PresenceFrame(
         people=(PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),),
         objects=(PresenceBox("phone", 0.42, 0.45, 0.5, 0.62, 0.7),),

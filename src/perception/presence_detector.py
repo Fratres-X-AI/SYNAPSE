@@ -407,7 +407,8 @@ class SmokingEventTracker:
 
         if mouth_watch:
             mouth_activity = True
-            posture_ok = self._posture_allows_smoking(
+            # Hand at mouth with vapor is enough — shoulders are often out of frame.
+            posture_ok = vapor or heavy_vapor or self._posture_allows_smoking(
                 shoulder,
                 heavy_vapor=heavy_vapor,
                 require_shoulder=True,

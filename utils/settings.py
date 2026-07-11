@@ -16,6 +16,7 @@ class UserSettings:
     retention_days: int = 30
     export_reports_to_desktop: bool = True
     privacy_mode: bool = True
+    active_user: str = "default"
 
 
 def load_settings(path: Path = settings_path()) -> UserSettings:

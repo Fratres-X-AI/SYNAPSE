@@ -13,6 +13,15 @@ def test_frozen_handlers_are_importable():
         module = importlib.import_module(module_name)
         assert hasattr(module, "main")
 
+    for module_name in (
+        "src.ui.dialogs",
+        "src.ui.theme",
+        "utils.onboarding_progress",
+        "utils.product",
+        "utils.user_profiles",
+    ):
+        importlib.import_module(module_name)
+
 
 def test_home_is_a_launch_command():
     parser = build_parser()

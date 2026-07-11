@@ -5,7 +5,6 @@ from pathlib import Path
 from utils.app_paths import emotion_profile_path
 
 LEGACY_EMOTION_PROFILE_PATH = Path("emotion_profile.json")
-DEFAULT_EMOTION_PROFILE_PATH = emotion_profile_path()
 ACTIVE_PHASES = ("neutral", "happy", "sad", "mad")
 
 PROFILE_KEYS = (
@@ -46,17 +45,21 @@ class EmotionProfile:
 
 def save_emotion_profile(
     profile: EmotionProfile,
-    path: Path = DEFAULT_EMOTION_PROFILE_PATH,
+    path: Path | None = None,
 ) -> None:
+    if path is None:
+        path = emotion_profile_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(profile), indent=2), encoding="utf-8")
 
 
 def load_emotion_profile(
-    path: Path = DEFAULT_EMOTION_PROFILE_PATH,
+    path: Path | None = None,
 ) -> EmotionProfile | None:
+    if path is None:
+        path = emotion_profile_path()
     if not path.exists():
-        if path == DEFAULT_EMOTION_PROFILE_PATH and LEGACY_EMOTION_PROFILE_PATH.exists():
+        if LEGACY_EMOTION_PROFILE_PATH.exists():
             path = LEGACY_EMOTION_PROFILE_PATH
         else:
             return None

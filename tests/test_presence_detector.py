@@ -469,7 +469,7 @@ def test_smoking_tracker_arms_watch_when_hand_at_mouth_then_fires():
     bright = frame.copy()
     bright[180:240, 260:380] = 250
     assert tracker.update(presence, bright, landmarks, 2.0, shoulder=calm) == ()
-    assert tracker.update(presence, bright, landmarks, 2.5, shoulder=raised) == ("smoking",)
+    assert tracker.update(presence, bright, landmarks, 2.5, shoulder=calm) == ("smoking",)
 
 
 def test_smoking_tracker_fires_with_phone_and_vapor():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 
 from utils.app_paths import consent_path, ensure_app_dirs
@@ -45,10 +46,7 @@ def record_privacy_consent() -> None:
     consent_path().write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def ensure_privacy_consent(auto_accept: bool = False) -> bool:
-    if has_privacy_consent():
-        return True
-
+def _terminal_consent(auto_accept: bool = False) -> bool:
     print(CONSENT_TEXT)
     if auto_accept:
         record_privacy_consent()
@@ -61,3 +59,22 @@ def ensure_privacy_consent(auto_accept: bool = False) -> bool:
 
     print("Consent not accepted. Synapse will exit without starting capture.")
     return False
+
+
+def ensure_privacy_consent(*, auto_accept: bool = False, prefer_gui: bool = True) -> bool:
+    if has_privacy_consent():
+        return True
+
+    use_gui = prefer_gui and os.getenv("SYNAPSE_CLI", "").lower() not in ("1", "true", "yes")
+    if use_gui:
+        try:
+            from src.ui.dialogs import ask_privacy_consent
+
+            if ask_privacy_consent(CONSENT_TEXT):
+                record_privacy_consent()
+                return True
+            return False
+        except Exception:
+            pass
+
+    return _terminal_consent(auto_accept=auto_accept)

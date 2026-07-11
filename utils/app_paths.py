@@ -39,11 +39,17 @@ def ensure_app_dirs() -> None:
 
 
 def calibration_path() -> Path:
-    return config_dir() / "calibration.json"
+    from utils.user_profiles import migrate_user_profiles, user_calibration_path
+
+    migrate_user_profiles()
+    return user_calibration_path()
 
 
 def emotion_profile_path() -> Path:
-    return config_dir() / "emotion_profile.json"
+    from utils.user_profiles import migrate_user_profiles, user_emotion_profile_path
+
+    migrate_user_profiles()
+    return user_emotion_profile_path()
 
 
 def settings_path() -> Path:
@@ -92,14 +98,21 @@ def delete_all_user_data() -> None:
 
 
 def data_inventory() -> dict[str, str | int]:
+    from utils.user_profiles import get_active_user_display_name, get_user_profile, list_user_profiles, migrate_user_profiles
+
     ensure_app_dirs()
     migrate_legacy_data()
+    migrate_user_profiles()
+    active = get_user_profile()
     sessions = list(session_dir().glob("*"))
     reports = list(reports_dir().glob("*"))
     return {
         "app_data_dir": str(app_data_dir()),
-        "calibration_exists": int(calibration_path().exists()),
-        "emotion_profile_exists": int(emotion_profile_path().exists()),
+        "active_user": get_active_user_display_name(),
+        "active_user_id": active.user_id,
+        "profile_count": len(list_user_profiles()),
+        "calibration_exists": int(active.calibration_path.exists()),
+        "emotion_profile_exists": int(active.emotion_profile_path.exists()),
         "session_files": len([path for path in sessions if path.is_file()]),
         "report_files": len([path for path in reports if path.is_file()]),
     }
