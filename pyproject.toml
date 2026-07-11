@@ -1,0 +1,9 @@
+[project]
+name = "synapse"
+version = "0.0.0"
+description = "Webcam-first, local-first focus and fatigue support tool"
+requires-python = ">=3.11,<3.13"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

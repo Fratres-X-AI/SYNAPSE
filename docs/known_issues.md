@@ -2,6 +2,16 @@
 
 These limitations apply to the current webcam-first pilot build.
 
+## Python And Dependencies
+
+- Synapse requires **Python 3.11 or 3.12**. This matches the pinned `mediapipe==0.10.21` wheels on Windows.
+- **Python 3.13 and newer** often fail with `No matching distribution found for mediapipe` because no compatible wheel is published for that version.
+- **Python 3.7–3.10 are not supported** for this build. Downgrading to 3.7 will not fix MediaPipe install errors.
+- Run `.\scripts\check_python.ps1` before `pip install -r requirements.txt` to verify the interpreter.
+- If `mediapipe` imports fail on Windows with DLL errors, install the [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) (x64).
+- `requirements.txt` pins `numpy<2` because MediaPipe 0.10.21 is incompatible with NumPy 2.x.
+- Non-developers should prefer `Synapse.exe` from a GitHub Release (`docs/windows_install.md`) and skip Python entirely.
+
 ## Webcam And Environment
 
 - Face detection can fail in low light, harsh backlight, glare, or very flat lighting.

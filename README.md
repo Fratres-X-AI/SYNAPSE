@@ -20,11 +20,20 @@ Raw webcam video is not saved by Synapse. See `docs/privacy.md` before any pilot
 
 ## Setup
 
-Use Python 3.11+ on Windows with a working webcam.
+Use **Python 3.11 or 3.12** on Windows with a working webcam. Do not use the latest Python (3.13+) or older releases such as 3.7 — `mediapipe==0.10.21` only ships wheels for 3.11–3.12.
+
+Check your environment before installing:
 
 ```powershell
-python -m venv .venv
+.\scripts\check_python.ps1
+```
+
+Recommended install:
+
+```powershell
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -33,6 +42,19 @@ Optional tray and packaging dependencies:
 ```powershell
 pip install -r requirements-dev.txt
 ```
+
+If you only want to run Synapse (no Python setup), use `Synapse.exe` from a GitHub Release — see `docs/windows_install.md`.
+
+### Install troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `No matching distribution found for mediapipe` | Python 3.13+ (or very old Python) | Install Python 3.11, recreate `.venv`, rerun `check_python.ps1` |
+| Install hangs or fails on `mediapipe` after downgrading to 3.7 | Wrong direction — 3.7 is unsupported | Use 3.11 or 3.12 instead |
+| `ImportError` / DLL load failed on Windows | Missing MSVC runtime | Install [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) (x64) |
+| `numpy` version conflict | NumPy 2.x pulled in by another package | Stay in a fresh venv; `requirements.txt` pins `numpy<2` |
+
+More detail: `docs/known_issues.md`.
 
 ## Launcher Commands
 

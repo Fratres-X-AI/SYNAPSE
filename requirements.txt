@@ -1,3 +1,5 @@
+# Requires Python 3.11 or 3.12 (see pyproject.toml and scripts/check_python.ps1).
+# MediaPipe 0.10.21 has no wheels for Python 3.13+; Python 3.7-3.10 are not supported.
 mediapipe==0.10.21
 numpy<2
 opencv-python
