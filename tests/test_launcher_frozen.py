@@ -30,3 +30,14 @@ def test_home_is_a_launch_command():
     )
     assert "home" in command_action.choices
     assert "home" in SCRIPTS
+
+
+def test_needs_cli_console_for_help_and_utilities():
+    from synapse_launcher import _needs_cli_console
+
+    assert not _needs_cli_console([])
+    assert not _needs_cli_console(["home"])
+    assert not _needs_cli_console(["--tray"])
+    assert _needs_cli_console(["--help"])
+    assert _needs_cli_console(["data"])
+    assert _needs_cli_console(["settings"])

@@ -66,18 +66,31 @@ def relaunch_home() -> None:
     subprocess.Popen([sys.executable, str(launcher), "home"], cwd=ROOT)
 
 
+def _needs_cli_console(argv: list[str]) -> bool:
+    """Windowed builds need a console for argparse help and utility commands."""
+    if not argv:
+        return False
+    if argv == ["home"]:
+        return False
+    if argv == ["--tray"]:
+        return False
+    return True
+
+
 def ensure_cli_console(command: str | None) -> None:
     """Attach a console for frozen windowed builds running CLI subcommands."""
-    if not is_frozen() or not command or command == "home":
+    del command
+    if not is_frozen():
         return
     if sys.platform != "win32":
         return
     try:
         import ctypes
 
-        if ctypes.windll.kernel32.GetConsoleWindow():
-            return
-        ctypes.windll.kernel32.AllocConsole()
+        kernel32 = ctypes.windll.kernel32
+        attached = kernel32.AttachConsole(ctypes.c_ulong(-1).value)
+        if not attached and not kernel32.GetConsoleWindow():
+            kernel32.AllocConsole()
         sys.stdout = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
         sys.stderr = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
     except OSError:
@@ -346,14 +359,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    cli_argv = list(argv if argv is not None else sys.argv[1:])
+    if is_frozen() and _needs_cli_console(cli_argv):
+        ensure_cli_console("cli")
+
     parser = build_parser()
-    args, extra = parser.parse_known_args(argv)
+    args, extra = parser.parse_known_args(cli_argv or None)
 
     if args.tray and args.command is None:
         return run_tray()
 
     if args.command:
-        ensure_cli_console(args.command)
         return run_command(
             args.command,
             command_argv(args.command, extra, args.fullscreen),
