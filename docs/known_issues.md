@@ -22,9 +22,9 @@ These limitations apply to the current webcam-first pilot build.
 
 - The primary user keeps the full landmark mesh and is not boxed on screen.
 - Additional people are boxed/labeled as `Person`.
-- Desk items are identified when possible: `Phone`, `Food`, `Drink`, `Pen`, `Vape`, `Glasses`, `Hand`, and similar labels.
-- Vape/pen/glasses use object detection plus hand/mouth heuristics; they are estimates, not certainties.
-- Presence is written to `monitor_*.presence.log` lines like `7:17 AM | User | Vape`.
+- Object presence is limited to **Phone** for handheld devices.
+- **Smoking** is logged as a sustained event from vapor and mouth activity heuristics, not as a boxed object.
+- Presence is written to `monitor_*.presence.log` lines like `7:17 AM | User | Phone | Smoking`.
 - Presence events do not identify who appeared and should not be treated as identity or discipline signals.
 
 ## Webcam And Environment

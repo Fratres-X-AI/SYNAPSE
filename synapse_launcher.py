@@ -213,7 +213,20 @@ def _try_import_tray():
     return pystray, Image, ImageDraw
 
 
+def _icon_asset_path(name: str) -> Path | None:
+    for base in (ROOT, RESOURCE_ROOT):
+        candidate = base / "assets" / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _make_tray_icon(Image, ImageDraw):
+    asset = _icon_asset_path("synapse_icon.png")
+    if asset is not None:
+        image = Image.open(asset).convert("RGBA")
+        return image.resize((64, 64), Image.Resampling.LANCZOS)
+
     size = 64
     image = Image.new("RGB", (size, size), color=(18, 22, 32))
     draw = ImageDraw.Draw(image)

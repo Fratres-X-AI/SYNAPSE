@@ -106,7 +106,7 @@ def test_small_phone_in_hand_qualifies():
 def test_phone_near_hand_without_overlap_qualifies():
     from src.perception.presence_detector import _qualifies_as_phone
 
-    phone = PresenceBox("phone", 0.50, 0.38, 0.58, 0.62, 0.45)
+    phone = PresenceBox("phone", 0.50, 0.38, 0.58, 0.62, 0.50)
     hand = PresenceBox("hand", 0.42, 0.44, 0.54, 0.70, 0.7)
 
     assert _qualifies_as_phone(phone, [hand])
@@ -346,6 +346,34 @@ def test_device_slab_on_hand_from_capture_profile():
     assert not _device_slab_on_hand(bare_hand_blob, hand)
 
 
+def test_confident_coco_phone_passes_even_with_high_hand_overlap():
+    from src.perception.presence_detector import _qualifies_as_phone
+
+    # Grip overlap from phone-only capture: ratio ~0.65, still a real phone.
+    phone = PresenceBox("phone", 0.44, 0.52, 0.54, 0.76, 0.55)
+    hand = PresenceBox("hand", 0.42, 0.55, 0.58, 0.78, 0.7)
+
+    assert _qualifies_as_phone(phone, [hand])
+
+
+def test_stick_phone_label_holds_brief_gap():
+    from time import monotonic
+
+    from src.perception.presence_detector import PresenceDetector
+
+    detector = PresenceDetector(enable_objects=False, enable_hands=False)
+    hand = PresenceBox("hand", 0.42, 0.48, 0.58, 0.76, 0.7)
+    phone = PresenceBox("phone", 0.44, 0.52, 0.52, 0.70, 0.72)
+    now = monotonic()
+    with_phone = detector._stick_phone_label([phone], [hand], None, now)
+    assert {obj.label for obj in with_phone} == {"phone"}
+    held = detector._stick_phone_label([], [hand], None, now + 0.5)
+    assert {obj.label for obj in held} == {"phone"}
+    cleared = detector._stick_phone_label([], [hand], None, now + 2.5)
+    assert cleared == []
+    detector.close()
+
+
 def test_stick_phone_label_drops_hand_sized_phone():
     from src.perception.presence_detector import PresenceDetector
 
@@ -376,6 +404,27 @@ def test_display_label_formats_for_log():
     assert display_label("smoking") == "Smoking"
 
 
+def test_phone_in_front_of_face_is_not_blocked():
+    from types import SimpleNamespace
+
+    from src.perception.presence_detector import (
+        _MOUTH_INDICES,
+        _blocks_phone_label,
+        _qualifies_as_phone,
+    )
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    for index in _MOUTH_INDICES:
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.48, z=0.0)
+
+    mouth = (0.5, 0.48)
+    hand = PresenceBox("hand", 0.38, 0.42, 0.62, 0.82, 0.7)
+    phone = PresenceBox("phone", 0.36, 0.30, 0.64, 0.88, 0.62)
+
+    assert not _blocks_phone_label(phone, mouth, [hand])
+    assert _qualifies_as_phone(phone, [hand], mouth)
+
+
 def test_coco_phone_at_mouth_is_dropped_not_phone():
     from types import SimpleNamespace
 
@@ -389,6 +438,38 @@ def test_coco_phone_at_mouth_is_dropped_not_phone():
     mouth_hand = PresenceBox("hand", 0.44, 0.42, 0.58, 0.62, 0.7)
     refined = _refine_object_labels([pod], [mouth_hand], landmarks, None)
     assert refined == []
+
+
+def test_smoking_tracker_arms_watch_when_hand_at_mouth_then_fires():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from src.perception.presence_detector import SmokingEventTracker, _MOUTH_INDICES
+    from src.perception.shoulder_tracker import ShoulderSample
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    for index in _MOUTH_INDICES:
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.55, z=0.0)
+
+    frame = np.full((480, 640, 3), 40, dtype=np.uint8)
+    presence = PresenceFrame(
+        detected_hands=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),),
+    )
+    tracker = SmokingEventTracker(
+        watch_seconds=10.0,
+        sustain_seconds=0.0,
+        vapor_boost=8.0,
+        cooldown_seconds=0.0,
+    )
+    calm = ShoulderSample(visible=True, center_y=0.58, lift=0.0, elevated=False)
+    raised = ShoulderSample(visible=True, center_y=0.58, lift=0.02, elevated=True)
+
+    assert tracker.update(presence, frame, landmarks, 0.0, shoulder=calm) == ()
+    bright = frame.copy()
+    bright[180:240, 260:380] = 250
+    assert tracker.update(presence, bright, landmarks, 2.0, shoulder=calm) == ()
+    assert tracker.update(presence, bright, landmarks, 2.5, shoulder=raised) == ("smoking",)
 
 
 def test_smoking_tracker_fires_with_phone_and_vapor():
@@ -420,10 +501,61 @@ def test_smoking_tracker_fires_with_phone_and_vapor():
 
 def test_presence_event_logger_writes_timestamped_line(tmp_path: Path):
     log_path = tmp_path / "presence.log"
-    logger = PresenceEventLogger(log_path, sustain_seconds=0.0)
+    logger = PresenceEventLogger(log_path, sustain_seconds=0.0, label_sustain={})
     when = datetime(2026, 7, 11, 7, 17, 0)
 
     lines = logger.update({"user", "phone"}, when=when)
 
-    assert lines == ["7:17 AM | Phone | User"]
-    assert log_path.read_text(encoding="utf-8").strip().endswith("7:17 AM | Phone | User")
+    assert lines == ["7:17 AM | Phone"]
+    assert log_path.read_text(encoding="utf-8").strip().endswith("7:17 AM | Phone")
+
+
+def test_presence_event_logger_ignores_flicker(tmp_path: Path):
+    log_path = tmp_path / "presence.log"
+    logger = PresenceEventLogger(log_path, sustain_seconds=0.0, label_sustain={"phone": 10.0})
+    when = datetime(2026, 7, 11, 7, 17, 0)
+
+    assert logger.update({"phone"}, when=when) == []
+    assert logger.update(set(), when=when) == []
+    assert log_path.read_text(encoding="utf-8").strip() == "# Synapse presence log (sustained episodes)"
+
+
+def test_presence_event_logger_hourly_phone_total(tmp_path: Path, monkeypatch):
+    log_path = tmp_path / "presence.log"
+    logger = PresenceEventLogger(log_path, sustain_seconds=0.0, label_sustain={"phone": 10.0})
+    clock = iter([0.0, 5.0, 10.0, 18.0, 25.0, 25.0])
+    monkeypatch.setattr("src.monitoring.presence_logger.monotonic", lambda: next(clock))
+    when_7 = datetime(2026, 7, 11, 7, 45, 0)
+    when_8 = datetime(2026, 7, 11, 8, 0, 0)
+
+    assert logger.update({"phone"}, when=when_7) == []
+    assert logger.update(set(), when=when_7) == []
+    assert logger.update({"phone"}, when=when_7) == []
+    assert logger.update(set(), when=when_7) == []
+    lines = logger.update(set(), when=when_8)
+
+    assert lines == ["8:00 AM | Phone this hour (7 AM\u20138 AM): 13s total"]
+    assert logger.finalize(when=when_8) == []
+
+
+def test_presence_event_logger_logs_sustained_phone(tmp_path: Path, monkeypatch):
+    log_path = tmp_path / "presence.log"
+    logger = PresenceEventLogger(log_path, sustain_seconds=0.0, label_sustain={"phone": 10.0})
+    clock = iter([0.0, 11.0])
+    monkeypatch.setattr("src.monitoring.presence_logger.monotonic", lambda: next(clock))
+    when = datetime(2026, 7, 11, 7, 17, 0)
+
+    assert logger.update({"phone"}, when=when) == []
+    assert logger.update({"phone"}, when=when) == ["7:17 AM | Phone"]
+
+
+def test_presence_event_logger_writes_end_line(tmp_path: Path, monkeypatch):
+    log_path = tmp_path / "presence.log"
+    logger = PresenceEventLogger(log_path, sustain_seconds=0.0, label_sustain={})
+    clock = iter([0.0, 10.0, 70.0])
+    monkeypatch.setattr("src.monitoring.presence_logger.monotonic", lambda: next(clock))
+    when = datetime(2026, 7, 11, 7, 17, 0)
+
+    assert logger.update({"phone"}, when=when) == ["7:17 AM | Phone"]
+    assert logger.update({"phone"}, when=when) == []
+    assert logger.update(set(), when=when) == ["7:17 AM | Phone ended (1m 10s)"]

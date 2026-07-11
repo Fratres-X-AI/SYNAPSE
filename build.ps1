@@ -24,6 +24,8 @@ $buildDir = Join-Path $PSScriptRoot "build"
 if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
 
+& $python (Join-Path $PSScriptRoot "scripts\build_icon.py")
+
 & $python -m PyInstaller --clean Synapse.spec
 
 if ($LASTEXITCODE -ne 0) {

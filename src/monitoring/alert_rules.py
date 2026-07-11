@@ -14,7 +14,7 @@ class AlertRule:
 DEFAULT_RULES = (
     AlertRule("low_engagement", "Low engagement sustained", 120.0),
     AlertRule("high_distraction", "High distraction sustained", 120.0),
-    AlertRule("fatigue_spike", "Fatigue spike detected", 60.0),
+    AlertRule("fatigue_spike", "Fatigue spike detected", 120.0),
     AlertRule("high_tension", "Elevated tension sustained", 90.0),
 )
 
@@ -31,7 +31,7 @@ class TriggeredAlert:
 class MonitorAlertEngine:
     engagement_threshold: float = 0.40
     distraction_threshold: int = 70
-    fatigue_threshold: float = 0.55
+    fatigue_threshold: float = 0.68
     tension_threshold: float = 0.50
     rules: tuple[AlertRule, ...] = DEFAULT_RULES
     _active_since: dict[str, float] = field(default_factory=dict)
@@ -46,11 +46,13 @@ class MonitorAlertEngine:
         tension: float,
         distraction: int,
         timestamp_iso: str,
+        *,
+        phone_active: bool = False,
     ) -> tuple[str, list[TriggeredAlert]]:
         now = monotonic()
         conditions = {
             "low_engagement": engagement < self.engagement_threshold,
-            "high_distraction": distraction > self.distraction_threshold,
+            "high_distraction": distraction > self.distraction_threshold and not phone_active,
             "fatigue_spike": fatigue > self.fatigue_threshold,
             "high_tension": tension > self.tension_threshold,
         }

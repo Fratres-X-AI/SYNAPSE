@@ -63,3 +63,17 @@ def test_presence_hud_note_lists_identified_labels():
     assert "User" in note
     assert "Person" in note
     assert "Phone" in note
+
+
+def test_presence_hud_note_monitor_mode_hides_user_and_shows_phone_only():
+    presence = PresenceFrame(
+        people=(PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),),
+        objects=(PresenceBox("phone", 0.42, 0.45, 0.5, 0.62, 0.7),),
+        events=("smoking",),
+        primary_index=0,
+    )
+
+    note = presence_hud_note(presence, monitor=True)
+
+    assert note == "Phone | Smoking"
+    assert "User" not in note

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any, Sequence
 
 import cv2
@@ -182,28 +183,33 @@ def _phone_use_posture(hand: PresenceBox, mouth: tuple[float, float]) -> bool:
     return False
 
 
-def _phone_is_bare_hand(phone: PresenceBox, hands: list[PresenceBox]) -> bool:
-    """Phone box that is just the hand bbox — not a real device detection."""
+def _is_hand_masquerading_as_phone(box: PresenceBox, hands: list[PresenceBox]) -> bool:
+    """Bare palm mislabeled as phone — not a gripped device."""
+    if not hands:
+        return False
     for hand in hands:
-        if not _boxes_overlap(phone, hand):
+        if not _boxes_overlap(box, hand):
             continue
-        if hand.area <= 0:
+        if hand.area <= 0 or box.area <= 0:
             continue
-        area_ratio = phone.area / hand.area
-        if area_ratio > 0.78:
-            return True
-        ix1 = max(phone.x_min, hand.x_min)
-        iy1 = max(phone.y_min, hand.y_min)
-        ix2 = min(phone.x_max, hand.x_max)
-        iy2 = min(phone.y_max, hand.y_max)
+        area_ratio = box.area / hand.area
+        ix1 = max(box.x_min, hand.x_min)
+        iy1 = max(box.y_min, hand.y_min)
+        ix2 = min(box.x_max, hand.x_max)
+        iy2 = min(box.y_max, hand.y_max)
         if ix1 >= ix2 or iy1 >= iy2:
             continue
         intersection = (ix2 - ix1) * (iy2 - iy1)
-        if phone.area <= 0:
-            continue
-        if intersection / phone.area >= 0.82 and area_ratio > 0.55:
+        coverage = intersection / box.area
+        if area_ratio >= 0.74 and coverage >= 0.80:
+            return True
+        if area_ratio >= 0.90 and coverage >= 0.65:
             return True
     return False
+
+
+def _phone_is_bare_hand(phone: PresenceBox, hands: list[PresenceBox]) -> bool:
+    return _is_hand_masquerading_as_phone(phone, hands)
 
 
 def _overlapping_hands(box: PresenceBox, hands: list[PresenceBox]) -> list[PresenceBox]:
@@ -225,6 +231,23 @@ def _device_slab_on_hand(box: PresenceBox, hand: PresenceBox) -> bool:
     return True
 
 
+def _coco_phone_trusted(box: PresenceBox) -> bool:
+    return box.confidence >= 0.48 and _looks_like_phone(box)
+
+
+def _phone_passes_hand_overlap(box: PresenceBox, hands: list[PresenceBox]) -> bool:
+    """Trust confident COCO phones in hand unless the box is a bare palm."""
+    overlap_hands = _overlapping_hands(box, hands)
+    if not overlap_hands:
+        return True
+    if _is_hand_masquerading_as_phone(box, hands):
+        return False
+    if _coco_phone_trusted(box):
+        return True
+    hand = max(overlap_hands, key=lambda item: item.area)
+    return _device_slab_on_hand(box, hand)
+
+
 def _handheld_false_positive(
     box: PresenceBox,
     hands: list[PresenceBox],
@@ -234,13 +257,9 @@ def _handheld_false_positive(
         return False
     if _blocks_phone_label(box, mouth, hands):
         return True
-    overlap_hands = _overlapping_hands(box, hands)
-    if not overlap_hands:
-        return False
-    hand = max(overlap_hands, key=lambda item: item.area)
-    if not _device_slab_on_hand(box, hand):
-        return True
     if not _looks_like_phone(box):
+        return True
+    if not _phone_passes_hand_overlap(box, hands):
         return True
     return box.confidence < 0.42
 
@@ -268,6 +287,26 @@ def _drop_hand_shaped_phones(
     return _strip_false_handheld(objects, hands)
 
 
+def _smooth_phone_box(
+    previous: PresenceBox,
+    current: PresenceBox,
+    *,
+    alpha: float = 0.38,
+) -> PresenceBox:
+    """Ease box jitter so the overlay does not jump frame to frame."""
+    blend = max(0.0, min(1.0, alpha))
+    keep = 1.0 - blend
+    return PresenceBox(
+        label=current.label,
+        x_min=(previous.x_min * keep) + (current.x_min * blend),
+        y_min=(previous.y_min * keep) + (current.y_min * blend),
+        x_max=(previous.x_max * keep) + (current.x_max * blend),
+        y_max=(previous.y_max * keep) + (current.y_max * blend),
+        confidence=max(previous.confidence, current.confidence),
+        is_primary=current.is_primary,
+    )
+
+
 def _infer_phone_from_use_posture(
     hands: list[PresenceBox],
     landmarks: Sequence[Any] | None,
@@ -279,12 +318,17 @@ def _infer_phone_from_use_posture(
         if not _phone_use_posture(hand, mouth):
             continue
         pad = 0.02
+        hand_w = hand.width
+        hand_h = hand.height
+        cx, cy = hand.center
+        slab_w = min(hand_w * 0.58, hand_h * 0.42)
+        slab_h = min(hand_h * 0.92, hand_w * 1.35)
         return PresenceBox(
             label="phone",
-            x_min=max(0.0, hand.x_min - pad),
-            y_min=max(0.0, hand.y_min - pad),
-            x_max=min(1.0, hand.x_max + pad),
-            y_max=min(1.0, hand.y_max + pad),
+            x_min=max(0.0, cx - slab_w / 2 - pad),
+            y_min=max(0.0, cy - slab_h / 2 - pad),
+            x_max=min(1.0, cx + slab_w / 2 + pad),
+            y_max=min(1.0, cy + slab_h / 2 + pad),
             confidence=0.58,
         )
     return None
@@ -298,15 +342,17 @@ def _presence_has_phone(presence: PresenceFrame) -> bool:
 class SmokingEventTracker:
     """Log smoking from vapor plus hand activity at the mouth."""
 
+    watch_seconds: float = 10.0
     sustain_seconds: float = 0.35
     cooldown_seconds: float = 6.0
     vapor_boost: float = 9.0
     heavy_vapor_boost: float = 18.0
-    event_hold_seconds: float = 2.5
+    event_hold_seconds: float = 6.0
     _mouth_luma_baseline: float | None = None
     _active_since: float | None = None
     _last_event_at: float = -999.0
     _visible_until: float = -999.0
+    _hand_watch_until: float = -999.0
 
     def update(
         self,
@@ -328,25 +374,47 @@ class SmokingEventTracker:
         phones = [obj for obj in presence.objects if obj.label == "phone"]
         from src.perception.phone_gaze import eyes_drawn_to_phone_use
 
+        hand_at_mouth = any(
+            _near_mouth(hand, mouth, margin=0.16) for hand in hands
+        )
+        if hand_at_mouth:
+            self._hand_watch_until = max(self._hand_watch_until, now + self.watch_seconds)
+
+        watching = now <= self._hand_watch_until
+
         vapor_level = self._vapor_level(rgb_frame, mouth)
         if vapor_level is None:
             self._active_since = None
             return ()
 
         vapor, heavy_vapor = vapor_level
+        phone_active = _presence_has_phone(presence) or any(
+            _phone_use_posture(hand, mouth) for hand in hands
+        )
+        mouth_watch = watching and hand_at_mouth
+        if phone_active and not heavy_vapor and not mouth_watch:
+            self._active_since = None
+            return ()
         if not vapor and not heavy_vapor:
+            if mouth_watch:
+                return ()
             if eyes_drawn_to_phone_use(landmarks, hands, phones):
                 self._active_since = None
                 return ()
-            if _presence_has_phone(presence) or any(_phone_use_posture(hand, mouth) for hand in hands):
+            if phone_active:
                 self._active_since = None
                 return ()
 
-        hand_at_mouth = any(
-            _near_mouth(hand, mouth, margin=0.16) for hand in hands
-        )
-        mouth_activity = hand_at_mouth or heavy_vapor
-        posture_ok = self._posture_allows_smoking(shoulder, heavy_vapor=heavy_vapor)
+        if mouth_watch:
+            mouth_activity = True
+            posture_ok = self._posture_allows_smoking(
+                shoulder,
+                heavy_vapor=heavy_vapor,
+                require_shoulder=True,
+            )
+        else:
+            mouth_activity = hand_at_mouth or heavy_vapor
+            posture_ok = self._posture_allows_smoking(shoulder, heavy_vapor=heavy_vapor)
 
         if mouth_activity and vapor and posture_ok:
             if self._active_since is None:
@@ -357,8 +425,9 @@ class SmokingEventTracker:
             ):
                 self._last_event_at = now
                 self._visible_until = now + self.event_hold_seconds
+                self._hand_watch_until = -999.0
                 return ("smoking",)
-        else:
+        elif not mouth_watch:
             self._active_since = None
         return ()
 
@@ -405,11 +474,16 @@ class SmokingEventTracker:
         return vapor, heavy_vapor
 
     @staticmethod
-    def _posture_allows_smoking(shoulder: Any | None, *, heavy_vapor: bool) -> bool:
+    def _posture_allows_smoking(
+        shoulder: Any | None,
+        *,
+        heavy_vapor: bool,
+        require_shoulder: bool = False,
+    ) -> bool:
         if heavy_vapor:
             return True
         if shoulder is None or not getattr(shoulder, "visible", False):
-            return True
+            return not require_shoulder
         return bool(getattr(shoulder, "elevated", False))
 
 
@@ -541,13 +615,15 @@ def _looks_like_pen(box: PresenceBox) -> bool:
 
 
 def _mouth_device_blocks_phone(box: PresenceBox) -> bool:
-    """Blocky object at the lips — reads like a phone to COCO but is not one."""
-    aspect = box.width / max(box.height, 1e-6)
+    """Small blocky mouth objects (pods) — not a phone held in front of the face."""
     if _looks_like_pen(box):
         return False
+    if _looks_like_phone(box) and box.area >= 0.04:
+        return False
+    aspect = box.width / max(box.height, 1e-6)
     blocky = 0.4 <= aspect <= 2.5
-    in_hand_size = 0.0015 < box.area < 0.14
-    return blocky and in_hand_size
+    pod_size = 0.0015 < box.area < 0.055
+    return blocky and pod_size
 
 
 def _blocks_phone_label(
@@ -556,6 +632,8 @@ def _blocks_phone_label(
     hands: list[PresenceBox] | None = None,
 ) -> bool:
     """Pods at the lips must not be labeled phone."""
+    if _looks_like_phone(box) and box.area >= 0.04:
+        return False
     if mouth is None:
         return False
     if _near_mouth(box, mouth, margin=0.15) and _mouth_device_blocks_phone(box):
@@ -569,13 +647,17 @@ def _blocks_phone_label(
 
 
 def _looks_like_phone(box: PresenceBox) -> bool:
-    """Handheld phone slab — not clothing, bags, or wall clutter."""
+    """Handheld phone slab — portrait, landscape, or phone-in-front-of-face."""
     aspect = box.width / max(box.height, 1e-6)
     if aspect > 1.8 or (aspect < 0.35 and box.area < 0.014):
         return False
+    portrait = 0.32 <= aspect <= 0.72
+    in_front_of_face = portrait and 0.38 <= box.height <= 0.65 and box.area < 0.22
     slab = 0.22 <= aspect <= 3.0
-    compact = 0.0010 < box.area < 0.12
-    not_wall_sized = max(box.width, box.height) < 0.42
+    max_area = 0.35 if in_front_of_face else (0.22 if portrait else 0.12)
+    max_span = 0.75 if in_front_of_face else 0.48
+    compact = 0.0010 < box.area < max_area
+    not_wall_sized = max(box.width, box.height) < max_span
     return slab and compact and not_wall_sized
 
 
@@ -602,6 +684,23 @@ def _near_or_overlaps_hand(box: PresenceBox, hands: list[PresenceBox], *, margin
     return False
 
 
+def _phone_in_active_use(
+    box: PresenceBox,
+    hands: list[PresenceBox],
+    mouth: tuple[float, float] | None,
+) -> bool:
+    """Phone must be in hand or held in front of the face — not wall clutter."""
+    if hands and _near_or_overlaps_hand(box, hands):
+        return True
+    cx, cy = box.center
+    if mouth is not None:
+        mx, my = mouth
+        near_face = abs(cx - mx) < 0.38 and (my - 0.18) < cy < (my + 0.52)
+        if near_face and _looks_like_phone(box):
+            return True
+    return 0.28 < cx < 0.72 and cy > 0.48 and _looks_like_phone(box)
+
+
 def _qualifies_as_phone(
     box: PresenceBox,
     hands: list[PresenceBox],
@@ -613,13 +712,13 @@ def _qualifies_as_phone(
         return False
     if _looks_like_background_clutter(box):
         return False
+    if not _phone_in_active_use(box, hands, mouth):
+        return False
     in_hand = _near_or_overlaps_hand(box, hands)
     if in_hand:
-        overlap_hands = _overlapping_hands(box, hands) or hands
-        hand = max(overlap_hands, key=lambda item: item.area)
-        if not _device_slab_on_hand(box, hand):
+        if not _phone_passes_hand_overlap(box, hands):
             return False
-        return box.confidence >= 0.42
+        return box.confidence >= 0.48
     if not _looks_like_background_clutter(box):
         return box.confidence >= 0.45
     return False
@@ -629,7 +728,7 @@ def _looks_like_background_clutter(box: PresenceBox) -> bool:
     """Jerseys, backpacks, and wall hangings — not a visitor."""
     aspect = box.width / max(box.height, 1e-6)
     cx, cy = box.center
-    if _looks_like_phone(box):
+    if _looks_like_phone(box) and box.area < 0.18:
         return False
     if box.area > 0.09:
         return True
@@ -832,7 +931,7 @@ def _refine_object_labels(
                 continue
             if _blocks_phone_label(candidate, mouth, hands):
                 continue
-            if not _device_slab_on_hand(candidate, hand) or candidate.confidence < 0.42:
+            if not _phone_passes_hand_overlap(candidate, hands) or candidate.confidence < 0.42:
                 continue
             if _looks_like_background_clutter(candidate):
                 continue
@@ -896,6 +995,7 @@ class PresenceDetector:
         self._object_detector = None
         self._mp_image = None
         self._phone_hold_until = -999.0
+        self._phone_hold_seconds = 2.2
         self._last_phone_box: PresenceBox | None = None
         if enable_objects:
             from mediapipe.tasks import python
@@ -967,7 +1067,7 @@ class PresenceDetector:
             objects = _apply_phone_gaze_split(objects, hands, landmarks)
 
         objects = _strip_false_handheld(list(objects), hands, mouth)
-        objects = self._stick_phone_label(list(objects), hands, mouth)
+        objects = self._stick_phone_label(list(objects), hands, mouth, time.monotonic())
         objects = _filter_allowed_objects(objects)
 
         return PresenceFrame(
@@ -1015,13 +1115,28 @@ class PresenceDetector:
         objects: list[PresenceBox],
         hands: list[PresenceBox],
         mouth: tuple[float, float] | None = None,
+        now: float | None = None,
     ) -> list[PresenceBox]:
+        tick = time.monotonic() if now is None else now
         phone_boxes = [obj for obj in objects if obj.label == "phone"]
         if phone_boxes:
             chosen = self._choose_phone_box(phone_boxes, hands, mouth)
             if chosen is not None:
+                if (
+                    self._last_phone_box is not None
+                    and _phones_compatible(chosen, self._last_phone_box)
+                ):
+                    chosen = _smooth_phone_box(self._last_phone_box, chosen)
                 self._last_phone_box = chosen
+                self._phone_hold_until = tick + self._phone_hold_seconds
                 return self._single_phone_objects(objects, chosen)
+        if (
+            self._last_phone_box is not None
+            and tick <= self._phone_hold_until
+            and not _handheld_false_positive(self._last_phone_box, hands, mouth)
+            and _phone_in_active_use(self._last_phone_box, hands, mouth)
+        ):
+            return self._single_phone_objects(objects, self._last_phone_box)
         self._last_phone_box = None
         return [obj for obj in objects if obj.label != "phone"]
 

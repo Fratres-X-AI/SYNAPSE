@@ -140,6 +140,8 @@ def main() -> None:
     finally:
         camera.release()
         display.close()
+        for line in presence_event_logger.finalize():
+            print(f"[PRESENCE] {line}")
         print("Showcase ended.")
 
 

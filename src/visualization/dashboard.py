@@ -125,6 +125,8 @@ def render_fusion_dashboard(
     *,
     subtitle: str = "",
     fps: float | None = None,
+    quality_message: str = "",
+    quality_color: tuple[int, int, int] | None = None,
 ):
     if fusion is None:
         draw_waiting_state(frame)
@@ -140,5 +142,7 @@ def render_fusion_dashboard(
         alert_message=alert_message,
         subtitle=subtitle,
         fps=fps,
+        quality_message=quality_message,
+        quality_color=quality_color,
     )
     return frame

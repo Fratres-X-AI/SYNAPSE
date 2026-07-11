@@ -14,23 +14,22 @@ from src.monitoring.alert_rules import MonitorAlertEngine
 from src.monitoring.presence_logger import PresenceEventLogger
 from src.perception.capture import CameraCapture
 from src.perception.emotion_estimator import EmotionEstimator
-from src.perception.frame_quality import assess_frame_quality, draw_quality_pill
+from src.perception.frame_quality import assess_frame_quality
 from src.perception.presence_detector import PresenceTracker, display_label
-from src.perception.shoulder_tracker import draw_shoulder_markers
 from src.perception.state_estimator import StateEstimator
 from src.visualization.alerts import StateAlertTracker
-from src.visualization.dashboard import draw_profile_match_bars, render_fusion_dashboard
+from src.visualization.dashboard import render_fusion_dashboard
 from src.visualization.debrief import run_session_debrief
 from src.visualization.display_adapter import create_display_adapter
 from src.visualization.landmark_overlay import draw_all_tracking_overlays
 from src.visualization.monitor_hud import (
     RuleBannerTracker,
+    SmokingBannerTracker,
     VisitorBannerTracker,
     build_monitor_subtitle,
     compose_monitor_banner,
 )
 from src.visualization.presence_overlay import draw_presence_overlay
-from src.visualization.timeline import draw_live_session_strip
 from utils.config import Config
 from utils.app_paths import cleanup_old_data
 from utils.emotion_profile import EmotionProfile, load_emotion_profile
@@ -94,7 +93,7 @@ def main() -> None:
     presence_event_logger = PresenceEventLogger(presence_log_path)
     visitor_banner = VisitorBannerTracker()
     rule_banner = RuleBannerTracker()
-    live_rows: deque[dict] = deque(maxlen=240)
+    smoking_banner = SmokingBannerTracker()
     show_landmarks = False
     started_at = monotonic()
     last_summary_at = started_at
@@ -106,7 +105,7 @@ def main() -> None:
         print("Loaded emotion profile: N / H / S/S / Mad")
     else:
         print("No profile - run: python synapse_launcher.py onboard")
-    print("Alert rules: low engagement 2m | high distraction 2m | fatigue 1m | tension 90s")
+    print("Alert rules: low engagement 2m | high distraction 2m | fatigue 2m | tension 90s")
     print("Act naturally. Press 'q' to stop, 'f' for fullscreen, 'm' for landmark shell.")
 
     with log_path.open("w", newline="", encoding="utf-8") as log_file, alert_log_path.open(
@@ -217,6 +216,7 @@ def main() -> None:
 
                     elapsed = monotonic() - started_at
                     timestamp = datetime.now().isoformat(timespec="seconds")
+                    phone_active = presence is not None and "phone" in presence.active_labels()
                     active_alerts, new_alerts = monitor_alerts.evaluate(
                         elapsed,
                         soft.engagement,
@@ -224,6 +224,7 @@ def main() -> None:
                         soft.tension,
                         distraction,
                         timestamp,
+                        phone_active=phone_active,
                     )
                     for alert in new_alerts:
                         print(f"[ALERT] {alert.message} at {alert.elapsed_sec:.0f}s")
@@ -232,14 +233,6 @@ def main() -> None:
                             [alert.timestamp_iso, f"{alert.elapsed_sec:.2f}", alert.rule_id, alert.message]
                         )
                         alert_file.flush()
-
-                    live_rows.append(
-                        {
-                            "state": cognitive.state.value,
-                            "profile_phase": profile_phase or "",
-                            "engagement": f"{soft.engagement:.3f}",
-                        }
-                    )
 
                     cog = cognitive.signals
                     writer.writerow(
@@ -281,8 +274,7 @@ def main() -> None:
                     fusion.cognitive.state if fusion else None,
                     agent.autonomy_level if fusion else None,
                 )
-                draw_presence_overlay(frame, presence)
-                draw_shoulder_markers(frame, camera.last_pose_landmarks, camera.last_shoulder_sample)
+                draw_presence_overlay(frame, presence, monitor=True)
                 if show_landmarks and landmarks is not None:
                     draw_all_tracking_overlays(frame, landmarks)
                 banner = compose_monitor_banner(
@@ -291,7 +283,9 @@ def main() -> None:
                     state_message="",
                     visitor_tracker=visitor_banner,
                     rule_tracker=rule_banner,
+                    smoking_tracker=smoking_banner,
                     new_rule_messages=new_rule_messages,
+                    presence=presence,
                 )
                 subtitle = build_monitor_subtitle(
                     presence,
@@ -299,6 +293,7 @@ def main() -> None:
                     fusion,
                     agent.autonomy_level if fusion else None,
                 )
+                quality_message, quality_color = assess_frame_quality(frame, face_detected=face_detected)
                 frame = render_fusion_dashboard(
                     frame,
                     fusion,
@@ -308,20 +303,9 @@ def main() -> None:
                     alert_message=banner,
                     subtitle=subtitle,
                     fps=fps_tracker.tick(),
+                    quality_message=quality_message,
+                    quality_color=quality_color,
                 )
-                quality_message, quality_color = assess_frame_quality(frame, face_detected=face_detected)
-                if fusion is not None:
-                    height, width = frame.shape[:2]
-                    draw_profile_match_bars(frame, fusion, (width - 168, 42))
-                    if len(live_rows) > 3:
-                        draw_live_session_strip(
-                            frame,
-                            list(live_rows),
-                            (16, height - 22),
-                            (min(220, width - 32), 14),
-                            mode="profile",
-                        )
-                draw_quality_pill(frame, quality_message, quality_color)
                 if landmarks is None:
                     cv2.putText(
                         frame,
@@ -354,6 +338,8 @@ def main() -> None:
         finally:
             camera.release()
             display.close()
+            for line in presence_event_logger.finalize():
+                print(f"[PRESENCE] {line}")
             elapsed = monotonic() - started_at
             print(f"\nMonitor ended after {elapsed:.0f}s")
             print(f"Session saved to {log_path}")

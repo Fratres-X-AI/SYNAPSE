@@ -3,7 +3,7 @@ import sys
 import cv2
 
 from src.cognition.cognitive_state import State
-from src.visualization.hud_text import HUD_ACCENT, HUD_LABEL, draw_hud_text
+from src.visualization.hud_text import draw_hud_text, text_width
 from src.visualization.instrument_theme import CAUTION, STATE_COLORS, WARN
 
 STATE_MESSAGES = {
@@ -81,10 +81,23 @@ def draw_alert_banner(frame, message: str, state: State | None = None):
         return frame
 
     height, width = frame.shape[:2]
-    accent = STATE_ALERT_COLORS.get(state, CAUTION) if state else CAUTION
-    y = height // 2
-    draw_hud_text(frame, message.upper(), (24, y - 8), size=14, color=HUD_LABEL, label=True)
-    cv2.line(frame, (20, y + 12), (width - 20, y + 12), accent, 2, cv2.LINE_AA)
-    if state == State.DISTRACTED:
-        draw_hud_text(frame, "CAUTION", (width - 100, y - 8), size=12, color=WARN, label=True)
+    text = message.upper()
+    size = 11
+    accent = WARN if any(token in text for token in ("FATIGUE", "DISTRACTION", "TENSION", "ENGAGEMENT")) else (
+        STATE_ALERT_COLORS.get(state, CAUTION) if state else CAUTION
+    )
+    tw = text_width(text, size=size, label=True)
+    pad_x, pad_y = 12, 12
+    box_w = tw + 18
+    box_h = 22
+    x = width - box_w - pad_x
+    y = height - box_h - pad_y
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x, y), (x + box_w, y + box_h), (4, 12, 18), -1, cv2.LINE_AA)
+    cv2.rectangle(overlay, (x, y), (x + box_w, y + box_h), accent, 1, cv2.LINE_AA)
+    roi = frame[y : y + box_h, x : x + box_w]
+    source = overlay[y : y + box_h, x : x + box_w]
+    cv2.addWeighted(source, 0.42, roi, 0.58, 0, roi)
+    draw_hud_text(frame, text, (x + 9, y + 4), size=size, color=accent, label=True)
     return frame

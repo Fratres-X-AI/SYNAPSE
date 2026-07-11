@@ -18,6 +18,20 @@ RULE_BANNERS = {
 
 
 @dataclass
+class SmokingBannerTracker:
+    hold_frames: int = 150
+    _frames_left: int = 0
+
+    def tick(self, presence: PresenceFrame | None) -> str:
+        if presence is not None and "smoking" in presence.active_labels():
+            self._frames_left = self.hold_frames
+        if self._frames_left > 0:
+            self._frames_left -= 1
+            return "SMOKING"
+        return ""
+
+
+@dataclass
 class VisitorBannerTracker:
     hold_frames: int = 90
     _frames_left: int = 0
@@ -64,18 +78,23 @@ def compose_monitor_banner(
     state_message: str,
     visitor_tracker: VisitorBannerTracker,
     rule_tracker: RuleBannerTracker,
+    smoking_tracker: SmokingBannerTracker,
     new_rule_messages: list[str],
+    presence: PresenceFrame | None = None,
 ) -> str:
     rule_tracker.update(new_rule_messages)
     visitor = visitor_tracker.tick(presence_event)
     if visitor:
         return visitor
+    smoking = smoking_tracker.tick(presence)
+    if smoking:
+        return smoking
     if state_message:
         return state_message
     rule = rule_tracker.current()
     if rule:
         return rule
-    return banner_from_active_alerts(active_alerts)
+    return ""
 
 
 def build_monitor_subtitle(
@@ -84,15 +103,11 @@ def build_monitor_subtitle(
     fusion: FusionState | None,
     autonomy: float | None,
 ) -> str:
+    del fusion, autonomy
     parts: list[str] = []
-    if fusion is not None:
-        phase = fusion.profile_phase or "—"
-        parts.append(f"PHASE {phase.upper()}")
-    presence_note = presence_hud_note(presence)
+    presence_note = presence_hud_note(presence, monitor=True)
     if presence_note:
         parts.append(presence_note)
-    if shoulder is not None:
+    if shoulder is not None and shoulder.visible:
         parts.append(shoulder.hud_text())
-    if autonomy is not None:
-        parts.append(f"AUT {autonomy:.0%}")
     return " | ".join(parts)

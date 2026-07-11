@@ -61,3 +61,21 @@ def test_alert_engine_resets_condition_timer_when_signal_recovers(monkeypatch):
     assert recovered_alerts == []
     assert active_again == "fatigue_spike"
     assert new_alerts == []
+
+
+def test_alert_engine_suppresses_distraction_while_phone_active(monkeypatch):
+    monkeypatch.setattr(alert_rules, "monotonic", lambda: 100.0)
+    engine = MonitorAlertEngine(rules=(AlertRule("high_distraction", "High distraction", 0.0),))
+
+    active, alerts = engine.evaluate(
+        1,
+        0.8,
+        0.1,
+        0.1,
+        85,
+        "t1",
+        phone_active=True,
+    )
+
+    assert active == ""
+    assert alerts == []

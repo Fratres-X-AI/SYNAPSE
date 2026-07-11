@@ -8,6 +8,8 @@ datas = [
     ("utils", "utils"),
     ("docs/privacy.md", "docs"),
     ("assets/models", "assets/models"),
+    ("assets/synapse.ico", "assets"),
+    ("assets/synapse_icon.png", "assets"),
 ]
 binaries = []
 hiddenimports = [
@@ -104,4 +106,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon="assets/synapse.ico",
 )

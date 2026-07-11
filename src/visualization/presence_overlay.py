@@ -18,6 +18,8 @@ OBJECT_COLOR = (188, 210, 228)
 SMOKING_COLOR = (96, 96, 255)
 
 _HIDDEN_BOX_LABELS = frozenset({"user", "hand"})
+_MONITOR_HUD_LABELS = frozenset({"phone", "smoking", "person"})
+_MONITOR_BOX_LABELS = frozenset({"phone", "person"})
 
 
 def _primary_person(presence: PresenceFrame) -> PresenceBox | None:
@@ -88,12 +90,14 @@ def _box_to_pixels(box: PresenceBox, width: int, height: int) -> tuple[int, int,
     return x1, y1, x2, y2
 
 
-def _draw_box(frame: np.ndarray, box: PresenceBox) -> None:
+def _draw_box(frame: np.ndarray, box: PresenceBox, *, show_tag: bool = True) -> None:
     height, width = frame.shape[:2]
     x1, y1, x2, y2 = _box_to_pixels(box, width, height)
     color = _color_for_label(box.label)
     thickness = 3 if box.is_primary else 2
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
+    if not show_tag:
+        return
     tag = display_label(box.label)
     text_y = max(18, y1 - 8)
     cv2.putText(
@@ -108,7 +112,12 @@ def _draw_box(frame: np.ndarray, box: PresenceBox) -> None:
     )
 
 
-def draw_presence_overlay(frame, presence: PresenceFrame | None) -> np.ndarray:
+def draw_presence_overlay(
+    frame,
+    presence: PresenceFrame | None,
+    *,
+    monitor: bool = False,
+) -> np.ndarray:
     """Outline visitors and identified desk items. User and hands stay unboxed."""
     if presence is None:
         return frame
@@ -118,18 +127,24 @@ def draw_presence_overlay(frame, presence: PresenceFrame | None) -> np.ndarray:
         for person in presence.people:
             if not _should_draw_person_box(person, primary):
                 continue
-            _draw_box(frame, person)
+            _draw_box(frame, person, show_tag=not monitor)
 
     for obj in presence.objects:
+        if monitor and obj.label not in _MONITOR_BOX_LABELS:
+            continue
         if not _should_draw_object_box(obj, primary):
             continue
-        _draw_box(frame, obj)
+        _draw_box(frame, obj, show_tag=not monitor)
 
     return frame
 
 
-def presence_hud_note(presence: PresenceFrame | None) -> str:
+def presence_hud_note(presence: PresenceFrame | None, *, monitor: bool = False) -> str:
     if presence is None:
         return ""
-    labels = [display_label(label) for label in sorted(presence.active_labels())]
-    return " | ".join(labels)
+    labels = presence.active_labels()
+    if monitor:
+        labels = {label for label in labels if label in _MONITOR_HUD_LABELS}
+    if not labels:
+        return ""
+    return " | ".join(display_label(label) for label in sorted(labels))

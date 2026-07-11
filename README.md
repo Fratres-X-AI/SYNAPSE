@@ -22,6 +22,20 @@ Raw webcam video is not saved by Synapse. See `docs/privacy.md` before any pilot
 
 Use **Python 3.11 or 3.12** on Windows with a working webcam. Do not use the latest Python (3.13+) or older releases such as 3.7 — `mediapipe==0.10.21` only ships wheels for 3.11–3.12.
 
+### Quick start (share with pilots)
+
+From the Synapse folder in PowerShell, run once:
+
+```powershell
+.\scripts\setup_windows.ps1
+```
+
+That installs dependencies and creates a **Synapse** icon on the desktop. Double-click it to open the launcher window. Choose **First Run** the first time.
+
+No PowerShell? Double-click `Launch Synapse.bat` after setup. If dependencies are missing, the batch file will tell you to run `setup_windows.ps1`.
+
+### Manual install
+
 Check your environment before installing:
 
 ```powershell

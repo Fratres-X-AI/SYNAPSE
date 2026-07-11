@@ -36,7 +36,7 @@ class CameraCapture:
         self.last_shoulder_sample: ShoulderSample | None = None
         self.last_pose_landmarks = None
         self._presence_stride = 1
-        self._pose_stride = 3
+        self._pose_stride = 1
         self._frame_index = 0
         self._cached_presence: PresenceFrame | None = None
         if detect_presence:

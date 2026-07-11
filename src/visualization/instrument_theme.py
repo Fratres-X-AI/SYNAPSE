@@ -58,6 +58,7 @@ def draw_vertical_tape(
     *,
     label: str = "",
     embedded: bool = False,
+    compact: bool = False,
 ) -> None:
     del embedded
     x, y = origin
@@ -76,7 +77,8 @@ def draw_vertical_tape(
     fill_top = int(track_bottom - (track_bottom - track_top) * clamped / 100)
     color = SAFE if clamped < 45 else CAUTION if clamped < 70 else WARN
     cv2.line(frame, (cx, fill_top), (cx, track_bottom), color, 3, cv2.LINE_AA)
-    draw_hud_text(frame, str(clamped), (x, track_bottom + 2), size=10)
+    if not compact:
+        draw_hud_text(frame, str(clamped), (x, track_bottom + 2), size=10)
 
 
 def draw_gaze_compass(

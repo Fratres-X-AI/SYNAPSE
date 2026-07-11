@@ -9,16 +9,34 @@ from pathlib import Path
 from tkinter import font as tkfont
 
 ROOT = Path(__file__).resolve().parent
+ICON_PATH = ROOT / "assets" / "synapse.ico"
+
+
+def _set_window_icon(window: tk.Tk) -> None:
+    if not ICON_PATH.exists():
+        return
+    try:
+        window.iconbitmap(default=str(ICON_PATH))
+    except tk.TclError:
+        pass
 
 
 def _launch(command: str, extra: list[str] | None = None) -> None:
+    argv = extra or []
+    if getattr(sys, "frozen", False):
+        subprocess.Popen([sys.executable, command, *argv], cwd=ROOT)
+        return
+
     launcher = ROOT / "synapse_launcher.py"
-    cmd = [sys.executable, str(launcher), command, *(extra or [])]
-    subprocess.Popen(cmd, cwd=ROOT)
+    if not launcher.exists():
+        print(f"Error: {launcher} not found", file=sys.stderr)
+        return
+    subprocess.Popen([sys.executable, str(launcher), command, *argv], cwd=ROOT)
 
 
 def run_home_shell() -> int:
     window = tk.Tk()
+    _set_window_icon(window)
     window.title("Synapse")
     window.configure(bg="#0c1018")
     window.geometry("520x420")
@@ -86,7 +104,7 @@ def run_home_shell() -> int:
 
     footer = tk.Label(
         window,
-        text="Tray: python synapse_launcher.py --tray",
+        text="Desktop: Synapse shortcut  |  Tray: synapse_launcher.py --tray",
         fg="#5c6678",
         bg="#0c1018",
         font=body_font,

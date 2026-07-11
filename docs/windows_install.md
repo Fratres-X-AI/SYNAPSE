@@ -12,7 +12,16 @@ Use this guide to run Synapse on a Windows machine without installing Python.
 
 1. Download `Synapse.exe` from the latest [GitHub Release](https://github.com/Fratres-X-AI/SYNAPSE/releases).
 2. Create a folder such as `C:\Synapse` and place `Synapse.exe` there.
-3. Open PowerShell or Command Prompt in that folder.
+3. Create a desktop shortcut (optional but recommended):
+
+```powershell
+cd C:\Synapse
+.\scripts\install_desktop_shortcut.ps1
+```
+
+If you only have the `.exe` (no scripts folder), right-click `Synapse.exe` → **Send to** → **Desktop (create shortcut)**, then edit the shortcut: append `home` to the target so it reads `Synapse.exe home`.
+
+Double-click the desktop icon to open the Synapse launcher window.
 
 ## First Run
 

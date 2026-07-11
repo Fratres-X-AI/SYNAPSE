@@ -33,3 +33,11 @@ def test_posture_allows_smoking_uses_shoulder_lift():
     assert SmokingEventTracker._posture_allows_smoking(raised, heavy_vapor=False) is True
     assert SmokingEventTracker._posture_allows_smoking(calm, heavy_vapor=True) is True
     assert SmokingEventTracker._posture_allows_smoking(None, heavy_vapor=False) is True
+    assert (
+        SmokingEventTracker._posture_allows_smoking(
+            None,
+            heavy_vapor=False,
+            require_shoulder=True,
+        )
+        is False
+    )

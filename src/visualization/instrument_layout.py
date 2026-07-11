@@ -47,7 +47,7 @@ class LayoutMetrics:
     top: int = 34
     margin: int = 12
     left_w: int = 158
-    right_w: int = 84
+    right_w: int = 108
 
     @property
     def left_x(self) -> int:
@@ -180,26 +180,61 @@ def draw_right_stack(
     fusion: FusionState | None = None,
     *,
     fps: float | None = None,
+    quality_message: str = "",
+    quality_color: tuple[int, int, int] | None = None,
 ) -> None:
     x = layout.right_x
     y = layout.content_top
-    compass_size = 72
-    tape_h = 72
-    stack_h = compass_size + tape_h + 34
-    _draw_glass_backplate(frame, x - 6, y - 4, layout.right_w + 10, stack_h + 8)
+    panel_w = layout.right_w + 8
+    header_h = 16
+    instrument_h = 58
+    footer_h = 16
+    stack_h = header_h + instrument_h + footer_h + 8
+    _draw_glass_backplate(frame, x - 6, y - 4, panel_w, stack_h)
+
+    if quality_message:
+        qw = text_width(quality_message, size=9, label=True)
+        draw_hud_text(
+            frame,
+            quality_message,
+            (x + max(0, (panel_w - qw) // 2) - 6, y),
+            size=9,
+            color=quality_color or SAFE,
+            label=True,
+        )
+
+    row_y = y + header_h
+    compass_r = 26
     draw_gaze_compass(
         frame,
         cognitive.signals["gaze_x"],
         cognitive.signals["gaze_y"],
-        (x, y),
-        radius=compass_size // 2,
+        (x + 2, row_y),
+        radius=compass_r,
     )
-    draw_vertical_tape(frame, (x + 18, y + compass_size + 8), (44, tape_h), distraction, label="DRF")
-    stat_y = y + compass_size + tape_h + 18
+    tape_x = x + 2 + compass_r * 2 + 10
+    draw_vertical_tape(
+        frame,
+        (tape_x, row_y),
+        (34, instrument_h),
+        distraction,
+        label="DRF",
+        compact=True,
+    )
+
+    stat_y = row_y + instrument_h + 6
     stab = int(max(0.0, min(1.0, cognitive.confidence)) * 100)
-    draw_hud_text(frame, f"STAB {stab:03d}", (x, stat_y), size=11)
+    stats = f"STAB {stab:03d}"
     if fps is not None and fps > 0:
-        draw_hud_text(frame, f"FPS {fps:4.0f}", (x, stat_y + 14), size=11, color=HUD_DIM)
+        stats = f"{stats}  FPS {fps:4.0f}"
+    sw = text_width(stats, size=10)
+    draw_hud_text(
+        frame,
+        stats,
+        (x + max(0, (panel_w - sw) // 2) - 6, stat_y),
+        size=10,
+        color=HUD_DIM,
+    )
 
 
 def render_instrument_hud(
@@ -213,6 +248,8 @@ def render_instrument_hud(
     alert_message: str = "",
     subtitle: str = "",
     fps: float | None = None,
+    quality_message: str = "",
+    quality_color: tuple[int, int, int] | None = None,
 ) -> None:
     if cognitive is None:
         draw_waiting_state(frame)
@@ -222,7 +259,16 @@ def render_instrument_hud(
     distraction = estimator.distraction_score(cognitive.signals)
     draw_annunciator(frame, cognitive.state, flash=flash, subtitle=subtitle)
     draw_left_stack(frame, layout, cognitive, distraction, ear_history, fusion)
-    draw_right_stack(frame, layout, cognitive, distraction, fusion, fps=fps)
+    draw_right_stack(
+        frame,
+        layout,
+        cognitive,
+        distraction,
+        fusion,
+        fps=fps,
+        quality_message=quality_message,
+        quality_color=quality_color,
+    )
 
     if alert_message:
         from src.visualization.alerts import draw_alert_banner
