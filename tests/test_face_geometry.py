@@ -71,6 +71,12 @@ def test_profile_ears_only_when_turned():
     profile = compute_peripheral_mesh(turned)
     assert profile.left_ear_count == 3
 
+    moderate = _synthetic_landmarks()
+    moderate[1] = _landmark(0.62, 0.56)
+    partial = compute_peripheral_mesh(moderate)
+    assert partial.left_ear_count == 0
+    assert partial.right_ear_count == 3
+
 
 def test_hairline_sits_above_forehead_and_brows():
     geometry = compute_hairline(_synthetic_landmarks())

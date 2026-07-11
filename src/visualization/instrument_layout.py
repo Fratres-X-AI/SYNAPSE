@@ -178,10 +178,15 @@ def draw_right_stack(
     cognitive: CognitiveState,
     distraction: int,
     fusion: FusionState | None = None,
+    *,
+    fps: float | None = None,
 ) -> None:
     x = layout.right_x
     y = layout.content_top
     compass_size = 72
+    tape_h = 72
+    stack_h = compass_size + tape_h + 34
+    _draw_glass_backplate(frame, x - 6, y - 4, layout.right_w + 10, stack_h + 8)
     draw_gaze_compass(
         frame,
         cognitive.signals["gaze_x"],
@@ -189,7 +194,12 @@ def draw_right_stack(
         (x, y),
         radius=compass_size // 2,
     )
-    draw_vertical_tape(frame, (x + 18, y + compass_size + 8), (44, 72), distraction, label="DRF")
+    draw_vertical_tape(frame, (x + 18, y + compass_size + 8), (44, tape_h), distraction, label="DRF")
+    stat_y = y + compass_size + tape_h + 18
+    stab = int(max(0.0, min(1.0, cognitive.confidence)) * 100)
+    draw_hud_text(frame, f"STAB {stab:03d}", (x, stat_y), size=11)
+    if fps is not None and fps > 0:
+        draw_hud_text(frame, f"FPS {fps:4.0f}", (x, stat_y + 14), size=11, color=HUD_DIM)
 
 
 def render_instrument_hud(
@@ -202,6 +212,7 @@ def render_instrument_hud(
     flash: bool = False,
     alert_message: str = "",
     subtitle: str = "",
+    fps: float | None = None,
 ) -> None:
     if cognitive is None:
         draw_waiting_state(frame)
@@ -211,7 +222,7 @@ def render_instrument_hud(
     distraction = estimator.distraction_score(cognitive.signals)
     draw_annunciator(frame, cognitive.state, flash=flash, subtitle=subtitle)
     draw_left_stack(frame, layout, cognitive, distraction, ear_history, fusion)
-    draw_right_stack(frame, layout, cognitive, distraction, fusion)
+    draw_right_stack(frame, layout, cognitive, distraction, fusion, fps=fps)
 
     if alert_message:
         from src.visualization.alerts import draw_alert_banner

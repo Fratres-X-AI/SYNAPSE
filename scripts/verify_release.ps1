@@ -25,6 +25,11 @@ if ($help.Code -ne 1 -and $help.Output -notmatch "Synapse cognitive monitoring l
     Write-Host $help.Output
     exit 1
 }
+if ($help.Output -notmatch "showcase") {
+    Write-Host "Help output missing showcase command." -ForegroundColor Red
+    Write-Host $help.Output
+    exit 1
+}
 Write-Host "[ok] --help" -ForegroundColor Green
 
 $data = Invoke-Synapse -CommandArgs @("data")

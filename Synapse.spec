@@ -47,6 +47,7 @@ hiddenimports = [
     "utils.emotion_profile",
     "utils.fusion_replay",
     "utils.fusion_summary",
+    "utils.fps_tracker",
     "utils.manager_report",
     "utils.pilot_report",
     "utils.privacy",

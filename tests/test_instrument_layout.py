@@ -61,6 +61,7 @@ def test_render_instrument_hud_draws_core_instruments_without_profile(monkeypatc
         estimator,
         fusion=fusion,
         subtitle="478+37",
+        fps=30.0,
     )
 
     joined = " | ".join(drawn)
@@ -69,6 +70,8 @@ def test_render_instrument_hud_draws_core_instruments_without_profile(monkeypatc
     assert "EYE" in drawn
     assert "ENG" in drawn
     assert any("DRIFT" in text for text in drawn)
+    assert any(text.startswith("STAB") for text in drawn)
+    assert any(text.startswith("FPS") for text in drawn)
     assert all(label not in drawn for label in ("N", "E", "S", "W"))
 
 

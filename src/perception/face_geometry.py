@@ -128,8 +128,8 @@ def _normalized_head_yaw(landmarks: Sequence[Any]) -> float:
 
 
 def _ear_side_visibility(yaw: float, side: str) -> float:
-    turn = max(0.0, -yaw - 0.15) if side == "left" else max(0.0, yaw - 0.15)
-    return float(np.clip(turn * 1.05, 0.0, 1.0))
+    turn = max(0.0, -yaw - 0.12) if side == "left" else max(0.0, yaw - 0.12)
+    return float(np.clip(turn * 1.1, 0.0, 1.0))
 
 
 def _face_shell_axes(
@@ -143,8 +143,8 @@ def _face_shell_axes(
         (left_face.x + right_face.x) / 2.0,
         (hairline.y + chin.y) / 2.0 + hairline.face_width * 0.01,
     )
-    radius_x = max(hairline.face_width * 0.57, 1e-6)
-    radius_y = max(hairline.chin_to_hairline * 0.55, 1e-6)
+    radius_x = max(hairline.face_width * 0.58, 1e-6)
+    radius_y = max(hairline.chin_to_hairline * 0.56, 1e-6)
     return center, radius_x, radius_y
 
 
@@ -213,7 +213,7 @@ def _rear_shell_lines(
     hairline: HairlineGeometry,
     yaw: float,
 ) -> tuple[tuple[tuple[float, float], tuple[float, float]], ...]:
-    if abs(yaw) < 0.28:
+    if abs(yaw) < 0.26:
         return ()
     apex = (hairline.x, min(left_anchor[1], right_anchor[1]) - hairline.face_height * 0.06)
     left_mid = (left_anchor[0] * 0.86 + apex[0] * 0.14, left_anchor[1] * 0.62 + apex[1] * 0.38)

@@ -20,6 +20,7 @@ from src.visualization.display_adapter import create_display_adapter
 from utils.config import Config
 from utils.app_paths import cleanup_old_data
 from utils.emotion_profile import EmotionProfile, load_emotion_profile
+from utils.fps_tracker import FpsTracker
 from utils.manager_report import write_manager_report
 from utils.privacy import ensure_privacy_consent
 from utils.settings import load_settings
@@ -71,6 +72,7 @@ def main() -> None:
         fullscreen=config.fullscreen,
     )
     ear_history: deque[float] = deque(maxlen=180)
+    fps_tracker = FpsTracker()
     started_at = monotonic()
     last_summary_at = started_at
 
@@ -216,6 +218,7 @@ def main() -> None:
                     ear_history,
                     estimator,
                     flash=flash,
+                    fps=fps_tracker.tick(),
                 )
                 if landmarks is None:
                     cv2.putText(

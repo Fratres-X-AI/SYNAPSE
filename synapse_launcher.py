@@ -191,7 +191,10 @@ def run_settings_command(args: list[str]) -> int:
 
 def command_argv(command: str, extra: list[str], fullscreen: bool) -> list[str]:
     argv = list(extra)
-    if fullscreen and "--fullscreen" not in argv:
+    if command == "showcase":
+        if "--windowed" not in argv and "--fullscreen" not in argv:
+            argv.append("--fullscreen")
+    elif fullscreen and "--fullscreen" not in argv:
         argv.append("--fullscreen")
     return argv
 

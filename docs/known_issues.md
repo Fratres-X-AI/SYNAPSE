@@ -12,6 +12,12 @@ These limitations apply to the current webcam-first pilot build.
 - `requirements.txt` pins `numpy<2` because MediaPipe 0.10.21 is incompatible with NumPy 2.x.
 - Non-developers should prefer `Synapse.exe` from a GitHub Release (`docs/windows_install.md`) and skip Python entirely.
 
+## Monitor Vs Showcase
+
+- `monitor` is the pilot path: session CSV/logging, reports, and HUD without landmark overlays.
+- `showcase` is the demo path: elite helmet shell, dense face mesh, and flight HUD (no session logging).
+- Use `python synapse_launcher.py showcase` for demos; use `monitor` for real sessions.
+
 ## Webcam And Environment
 
 - Face detection can fail in low light, harsh backlight, glare, or very flat lighting.

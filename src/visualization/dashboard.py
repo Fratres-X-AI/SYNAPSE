@@ -81,6 +81,7 @@ def render_fusion_dashboard(
     alert_message: str = "",
     *,
     subtitle: str = "",
+    fps: float | None = None,
 ):
     if fusion is None:
         draw_waiting_state(frame)
@@ -95,5 +96,6 @@ def render_fusion_dashboard(
         flash=flash,
         alert_message=alert_message,
         subtitle=subtitle,
+        fps=fps,
     )
     return frame

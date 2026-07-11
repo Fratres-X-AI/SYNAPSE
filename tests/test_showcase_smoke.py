@@ -19,10 +19,16 @@ def test_showcase_module_imports():
 def test_showcase_parse_args_accepts_fullscreen(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["test_showcase", "--fullscreen"])
     args = test_showcase.parse_args()
-    assert args.fullscreen is True
+    assert test_showcase._resolve_fullscreen(args) is True
 
 
-def test_showcase_parse_args_defaults(monkeypatch):
+def test_showcase_parse_args_defaults_fullscreen(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["test_showcase"])
     args = test_showcase.parse_args()
-    assert args.fullscreen is False
+    assert test_showcase._resolve_fullscreen(args) is True
+
+
+def test_showcase_parse_args_windowed(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["test_showcase", "--windowed"])
+    args = test_showcase.parse_args()
+    assert test_showcase._resolve_fullscreen(args) is False

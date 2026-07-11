@@ -21,13 +21,23 @@ from src.visualization.landmark_overlay import draw_all_tracking_overlays, showc
 from src.visualization.hud_text import HUD_LABEL, draw_hud_text
 from utils.config import Config
 from utils.emotion_profile import EmotionProfile, load_emotion_profile
+from utils.fps_tracker import FpsTracker
 from utils.privacy import ensure_privacy_consent
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Synapse full-feature showcase")
+    parser.add_argument(
+        "--windowed",
+        action="store_true",
+        help="Start windowed (default is fullscreen for demos)",
+    )
     parser.add_argument("--fullscreen", action="store_true", help="Start fullscreen (F to toggle)")
     return parser.parse_args()
+
+
+def _resolve_fullscreen(args: argparse.Namespace) -> bool:
+    return not args.windowed
 
 
 def main() -> None:
@@ -35,7 +45,7 @@ def main() -> None:
     if not ensure_privacy_consent():
         return
 
-    config = Config(fullscreen=args.fullscreen)
+    config = Config(fullscreen=_resolve_fullscreen(args))
     profile = load_emotion_profile(config.emotion_profile_path) or EmotionProfile()
     estimator = StateEstimator(**config.estimator_kwargs())
     emotion_estimator = EmotionEstimator(calibration_frames=0)
@@ -48,6 +58,7 @@ def main() -> None:
         fullscreen=config.fullscreen,
     )
     ear_history: deque[float] = deque(maxlen=180)
+    fps_tracker = FpsTracker()
 
     print("Synapse showcase running - all landmarks + flight instrument HUD.")
     print("Press Q to quit, F for fullscreen.")
@@ -97,6 +108,7 @@ def main() -> None:
                 flash=flash,
                 alert_message="",
                 subtitle=landmark_note,
+                fps=fps_tracker.tick(),
             )
 
             if landmarks is None:
