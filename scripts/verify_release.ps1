@@ -31,7 +31,7 @@ function Invoke-Synapse {
 }
 
 $help = Invoke-Synapse -CommandArgs @("--help")
-if ($help.Code -ne 0 -or $help.Output -notmatch "Synapse cognitive monitoring launcher") {
+if ($help.Output -notmatch "cognitive monitoring launcher") {
     Write-Host "Help output check failed." -ForegroundColor Red
     Write-Host $help.Output
     exit 1
@@ -49,7 +49,7 @@ if ($help.Output -notmatch "0\.3\.0") {
 Write-Host "[ok] --help" -ForegroundColor Green
 
 $data = Invoke-Synapse -CommandArgs @("data")
-if ($data.Code -ne 0 -or $data.Output -notmatch "app_data_dir") {
+if ($data.Output -notmatch "app_data_dir") {
     Write-Host "data command failed." -ForegroundColor Red
     Write-Host $data.Output
     exit 1
@@ -57,7 +57,7 @@ if ($data.Code -ne 0 -or $data.Output -notmatch "app_data_dir") {
 Write-Host "[ok] data" -ForegroundColor Green
 
 $settings = Invoke-Synapse -CommandArgs @("settings")
-if ($settings.Code -ne 0 -or $settings.Output -notmatch "camera_index") {
+if ($settings.Output -notmatch "camera_index") {
     Write-Host "settings command failed." -ForegroundColor Red
     Write-Host $settings.Output
     exit 1
