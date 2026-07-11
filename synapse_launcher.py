@@ -20,6 +20,7 @@ SCRIPTS = {
     "monitor": "synapse_monitor.py",
     "replay": "replay_monitor.py",
     "fusion": "synapse_fusion.py",
+    "showcase": "synapse_showcase.py",
     "pilot-summary": "synapse_pilot_summary.py",
 }
 SCRIPT_MODULES = {
@@ -27,6 +28,7 @@ SCRIPT_MODULES = {
     "synapse_monitor.py": "test_monitor",
     "replay_monitor.py": "replay_monitor",
     "synapse_fusion.py": "test_fusion_track",
+    "synapse_showcase.py": "test_showcase",
     "synapse_pilot_summary.py": "synapse_pilot_summary",
 }
 UTILITY_COMMANDS = {"first-run", "privacy", "data", "delete-data", "settings"}
@@ -66,6 +68,7 @@ Commands:
   first-run Run privacy notice, onboarding, then first monitor session
   onboard   Run unified onboarding wizard (calibration + emotion profile)
   monitor   Start production monitor mode
+  showcase  Demo mode with elite landmark shell + flight HUD
   replay    Replay latest monitor session (or pass a CSV path)
   fusion    Run fusion track mode (live N/H/S/M labeling)
   data      Show local data inventory
@@ -77,6 +80,7 @@ Examples:
   python synapse_launcher.py first-run
   python synapse_launcher.py onboard
   python synapse_launcher.py monitor
+  python synapse_launcher.py showcase --fullscreen
   python synapse_launcher.py replay
   python synapse_launcher.py data
   python synapse_launcher.py monitor --fullscreen
@@ -233,6 +237,7 @@ def run_tray() -> int:
         pystray.MenuItem("First Run", launch("first-run")),
         pystray.MenuItem("Onboard", launch("onboard")),
         pystray.MenuItem("Monitor", launch("monitor")),
+        pystray.MenuItem("Showcase", launch("showcase")),
         pystray.MenuItem("Replay (latest)", launch("replay")),
         pystray.MenuItem("Pilot Summary", launch("pilot-summary")),
         pystray.MenuItem("Data Inventory", launch("data")),

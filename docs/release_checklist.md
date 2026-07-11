@@ -7,6 +7,7 @@ Use this checklist before sharing a build with pilot users. Do not start billing
 - [ ] Create a fresh virtual environment.
 - [ ] Install `requirements.txt`.
 - [ ] Install `requirements-dev.txt` if building an executable.
+- [ ] Run `.\scripts\check_python.ps1` (or confirm Python 3.11–3.12).
 - [ ] Run `python synapse_launcher.py --help`.
 - [ ] Build with PyInstaller if shipping an executable:
 

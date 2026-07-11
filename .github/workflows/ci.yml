@@ -38,6 +38,9 @@ jobs:
               "src.cognition.profile_matcher",
               "src.cognition.soft_scores",
               "src.monitoring.alert_rules",
+              "src.perception.face_geometry",
+              "src.visualization.instrument_layout",
+              "src.visualization.landmark_overlay",
               "utils.fusion_summary",
           ):
               importlib.import_module(module_name)

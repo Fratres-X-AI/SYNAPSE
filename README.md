@@ -64,11 +64,13 @@ Run commands from the repository root:
 python synapse_launcher.py onboard
 python synapse_launcher.py monitor
 python synapse_launcher.py monitor --fullscreen
+python synapse_launcher.py showcase
+python synapse_launcher.py showcase --fullscreen
 python synapse_launcher.py replay "%LOCALAPPDATA%\Synapse\sessions\monitor_YYYYMMDD_HHMMSS.csv"
 python synapse_launcher.py --tray
 ```
 
-`onboard` records privacy consent, then captures calibration values and an expression profile. `monitor` starts a live webcam session and writes logs/reports. `replay` opens a saved session CSV; pass the CSV path explicitly for app-data sessions. Press `q` to quit a camera window and `f` to toggle fullscreen where supported.
+`onboard` records privacy consent, then captures calibration values and an expression profile. `monitor` starts a live webcam session and writes logs/reports. `showcase` runs the elite landmark shell and flight HUD for demos (no session logging). `replay` opens a saved session CSV; pass the CSV path explicitly for app-data sessions. Press `q` to quit a camera window and `f` to toggle fullscreen where supported.
 
 ## Local Data
 

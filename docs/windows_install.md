@@ -34,6 +34,8 @@ Press `q` to quit the camera window. Press `f` to toggle fullscreen where suppor
 .\Synapse.exe onboard
 .\Synapse.exe monitor
 .\Synapse.exe monitor --fullscreen
+.\Synapse.exe showcase
+.\Synapse.exe showcase --fullscreen
 .\Synapse.exe replay
 .\Synapse.exe data
 .\Synapse.exe settings

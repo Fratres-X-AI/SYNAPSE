@@ -12,9 +12,8 @@ from src.cognition.fusion_state import FusionState
 from src.perception.state_estimator import StateEstimator
 from src.visualization.hud_text import HUD_ACCENT, HUD_DIM, HUD_LABEL, draw_hud_text, text_width
 from src.visualization.instrument_theme import (
-    ACCENT,
-    SAFE,
     CAUTION,
+    SAFE,
     WARN,
     draw_annunciator_strip,
     draw_gaze_compass,
@@ -171,22 +170,6 @@ def draw_left_stack(
 
     spark_h = 36
     _draw_sparkline(frame, ear_history, x, layout.content_bottom - spark_h, w - 8, spark_h)
-
-
-def _draw_profile_rows(frame, x: int, y: int, width: int, scores: dict[str, float]) -> int:
-    draw_hud_text(frame, "PROFILE", (x, y), size=10, color=HUD_LABEL, label=True)
-    row_y = y + 14
-    for phase, label in (("neutral", "N"), ("happy", "H"), ("sad", "S"), ("mad", "M")):
-        value = scores.get(phase, 0.0)
-        draw_hud_text(frame, label, (x, row_y), size=10, color=HUD_DIM)
-        bar_x = x + 14
-        bar_right = x + width - 4
-        cv2.line(frame, (bar_x, row_y + 8), (bar_right, row_y + 8), HUD_DIM, 1, cv2.LINE_AA)
-        fill = int((bar_right - bar_x) * value)
-        if fill > 0:
-            cv2.line(frame, (bar_x, row_y + 8), (bar_x + fill, row_y + 8), ACCENT, 2, cv2.LINE_AA)
-        row_y += 12
-    return row_y
 
 
 def draw_right_stack(
