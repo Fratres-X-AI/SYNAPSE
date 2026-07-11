@@ -39,8 +39,11 @@ jobs:
               "src.cognition.soft_scores",
               "src.monitoring.alert_rules",
               "src.perception.face_geometry",
+              "src.perception.presence_detector",
+              "src.perception.shoulder_tracker",
               "src.visualization.instrument_layout",
               "src.visualization.landmark_overlay",
+              "src.visualization.presence_overlay",
               "utils.fusion_summary",
           ):
               importlib.import_module(module_name)

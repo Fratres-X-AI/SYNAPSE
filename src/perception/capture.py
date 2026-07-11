@@ -1,11 +1,17 @@
+import time
+from dataclasses import replace
+
 import cv2
 import mediapipe as mp
+
+from src.perception.presence_detector import PresenceDetector, PresenceFrame, SmokingEventTracker
+from src.perception.shoulder_tracker import ShoulderSample, ShoulderTracker
 
 
 class CameraCapture:
     """Frame and face-landmark capture for the local webcam."""
 
-    def __init__(self, camera_index: int = 0) -> None:
+    def __init__(self, camera_index: int = 0, *, detect_presence: bool = False) -> None:
         self.camera_index = camera_index
         self.failed_reads = 0
         self.cap = cv2.VideoCapture(camera_index)
@@ -21,12 +27,27 @@ class CameraCapture:
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         )
+        self._presence_detector = PresenceDetector() if detect_presence else None
+        self._smoking_tracker = SmokingEventTracker() if detect_presence else None
+        self._pose = None
+        self._shoulder_tracker = ShoulderTracker() if detect_presence else None
+        self.last_shoulder_sample: ShoulderSample | None = None
+        self.last_pose_landmarks = None
+        if detect_presence:
+            self._pose = mp.solutions.pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                enable_segmentation=False,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
 
     def get_frame_and_landmarks(self):
         ret, frame = self.cap.read()
         if not ret:
             self.failed_reads += 1
             return None, None
+
         self.failed_reads = 0
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -38,7 +59,52 @@ class CameraCapture:
 
         return frame, landmarks
 
+    def get_frame_landmarks_presence(self) -> tuple[object | None, object | None, PresenceFrame | None]:
+        ret, frame = self.cap.read()
+        if not ret:
+            self.failed_reads += 1
+            return None, None, None
+
+        self.failed_reads = 0
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.face_mesh.process(rgb_frame)
+
+        landmarks = None
+        if results.multi_face_landmarks:
+            landmarks = results.multi_face_landmarks[0].landmark
+
+        pose_landmarks = None
+        if self._pose is not None:
+            pose_results = self._pose.process(rgb_frame)
+            if pose_results.pose_landmarks:
+                pose_landmarks = pose_results.pose_landmarks.landmark
+        self.last_pose_landmarks = pose_landmarks
+        shoulder = None
+        if self._shoulder_tracker is not None:
+            shoulder = self._shoulder_tracker.update(pose_landmarks)
+            self.last_shoulder_sample = shoulder
+
+        presence = None
+        if self._presence_detector is not None:
+            presence = self._presence_detector.detect(rgb_frame, landmarks)
+            if self._smoking_tracker is not None and presence is not None:
+                events = self._smoking_tracker.update(
+                    presence,
+                    rgb_frame,
+                    landmarks,
+                    time.monotonic(),
+                    shoulder=shoulder,
+                )
+                if events:
+                    presence = replace(presence, events=events)
+
+        return frame, landmarks, presence
+
     def release(self) -> None:
+        if self._presence_detector is not None:
+            self._presence_detector.close()
+        if self._pose is not None:
+            self._pose.close()
         self.face_mesh.close()
         self.cap.release()
         cv2.destroyAllWindows()

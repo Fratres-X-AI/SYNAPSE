@@ -11,8 +11,10 @@ from src.cognition.fusion_state import FusionState
 from src.cognition.profile_matcher import match_profile
 from src.cognition.soft_scores import compute_soft_scores
 from src.monitoring.alert_rules import MonitorAlertEngine
+from src.monitoring.presence_logger import PresenceEventLogger
 from src.perception.capture import CameraCapture
 from src.perception.emotion_estimator import EmotionEstimator
+from src.perception.presence_detector import PresenceTracker, display_label
 from src.perception.state_estimator import StateEstimator
 from src.visualization.alerts import StateAlertTracker
 from src.visualization.dashboard import render_fusion_dashboard
@@ -48,10 +50,11 @@ def main() -> None:
     session_name = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = config.session_dir / f"monitor_{session_name}.csv"
     alert_log_path = config.session_dir / f"monitor_{session_name}.alerts.csv"
+    presence_log_path = config.session_dir / f"monitor_{session_name}.presence.log"
 
     profile = load_emotion_profile(config.emotion_profile_path) or EmotionProfile()
     try:
-        camera = CameraCapture(camera_index=config.camera_index)
+        camera = CameraCapture(camera_index=config.camera_index, detect_presence=True)
     except RuntimeError as error:
         print(f"Camera error: {error}")
         return
@@ -73,11 +76,14 @@ def main() -> None:
     )
     ear_history: deque[float] = deque(maxlen=180)
     fps_tracker = FpsTracker()
+    presence_tracker = PresenceTracker()
+    presence_event_logger = PresenceEventLogger(presence_log_path)
     started_at = monotonic()
     last_summary_at = started_at
 
     print("Synapse Monitor — production mode")
     print(f"Logging to {log_path}")
+    print(f"Presence log: {presence_log_path}")
     if profile.has_neutral():
         print("Loaded emotion profile: N / H / S/S / Mad")
     else:
@@ -117,13 +123,17 @@ def main() -> None:
                 "profile_happy",
                 "profile_sad",
                 "profile_mad",
+                "face_count",
+                "extra_people",
+                "presence_labels",
+                "presence_event",
             ]
         )
         alert_writer.writerow(["timestamp", "elapsed_sec", "rule_id", "message"])
 
         try:
             while True:
-                frame, landmarks = camera.get_frame_and_landmarks()
+                frame, landmarks, presence = camera.get_frame_landmarks_presence()
                 if frame is None:
                     if camera.failed_reads in (1, 30, 120):
                         print(f"Camera read failed ({camera.failed_reads} consecutive frames).")
@@ -132,6 +142,32 @@ def main() -> None:
                 now = monotonic()
                 fusion = None
                 active_alerts = ""
+                presence_event = ""
+                face_count = 0
+                extra_people = 0
+                presence_labels = ""
+                if presence is not None:
+                    face_count = presence.face_count
+                    extra_people = presence.extra_people
+                    presence_labels = ", ".join(
+                        display_label(label) for label in sorted(presence.active_labels())
+                    )
+                    presence_event = presence_tracker.update(extra_people, now)
+                    for line in presence_event_logger.update(presence.active_labels()):
+                        print(f"[PRESENCE] {line}")
+                    if presence_event == "visitor":
+                        timestamp = datetime.now().isoformat(timespec="seconds")
+                        elapsed = now - started_at
+                        alert_writer.writerow(
+                            [
+                                timestamp,
+                                f"{elapsed:.2f}",
+                                "visitor_detected",
+                                "Additional person in frame",
+                            ]
+                        )
+                        alert_file.flush()
+                        print(f"[PRESENCE] Additional person in frame at {elapsed:.0f}s")
 
                 if landmarks is not None:
                     cognitive = estimator.update(landmarks)
@@ -204,6 +240,10 @@ def main() -> None:
                             f"{profile_scores.get('happy', 0.0):.3f}",
                             f"{profile_scores.get('sad', 0.0):.3f}",
                             f"{profile_scores.get('mad', 0.0):.3f}",
+                            face_count,
+                            extra_people,
+                            presence_labels,
+                            presence_event,
                         ]
                     )
                     log_file.flush()

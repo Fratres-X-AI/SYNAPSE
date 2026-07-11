@@ -18,12 +18,21 @@ These limitations apply to the current webcam-first pilot build.
 - `showcase` is the demo path: elite helmet shell, dense face mesh, and flight HUD (no session logging).
 - Use `python synapse_launcher.py showcase` for demos; use `monitor` for real sessions.
 
+## Presence Detection
+
+- The primary user keeps the full landmark mesh and is not boxed on screen.
+- Additional people are boxed/labeled as `Person`.
+- Desk items are identified when possible: `Phone`, `Food`, `Drink`, `Pen`, `Vape`, `Glasses`, `Hand`, and similar labels.
+- Vape/pen/glasses use object detection plus hand/mouth heuristics; they are estimates, not certainties.
+- Presence is written to `monitor_*.presence.log` lines like `7:17 AM | User | Vape`.
+- Presence events do not identify who appeared and should not be treated as identity or discipline signals.
+
 ## Webcam And Environment
 
 - Face detection can fail in low light, harsh backlight, glare, or very flat lighting.
 - Glasses, sunglasses, masks, hair, hats, hand occlusion, and strong shadows can reduce accuracy.
 - Off-center webcams, laptop movement, and unusual camera angles can skew gaze/head estimates.
-- Multiple faces in frame are not a supported use case.
+- Multiple faces in frame are supported for presence logging; only the primary user receives landmark scoring.
 - External cameras may require changing local settings before launch.
 - Other apps can lock the webcam and prevent Synapse from starting.
 

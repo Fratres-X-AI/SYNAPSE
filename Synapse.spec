@@ -7,6 +7,7 @@ datas = [
     ("src", "src"),
     ("utils", "utils"),
     ("docs/privacy.md", "docs"),
+    ("assets/models", "assets/models"),
 ]
 binaries = []
 hiddenimports = [
@@ -28,9 +29,12 @@ hiddenimports = [
     "src.cognition.profile_matcher",
     "src.cognition.soft_scores",
     "src.monitoring.alert_rules",
+    "src.monitoring.presence_logger",
     "src.perception.capture",
     "src.perception.emotion_estimator",
     "src.perception.face_geometry",
+    "src.perception.presence_detector",
+    "src.perception.shoulder_tracker",
     "src.perception.state_estimator",
     "src.visualization.alerts",
     "src.visualization.dashboard",
@@ -38,6 +42,7 @@ hiddenimports = [
     "src.visualization.instrument_layout",
     "src.visualization.instrument_theme",
     "src.visualization.landmark_overlay",
+    "src.visualization.presence_overlay",
     "src.visualization.display_adapter",
     "src.visualization.display",
     "src.visualization.timeline",
@@ -48,6 +53,7 @@ hiddenimports = [
     "utils.fusion_replay",
     "utils.fusion_summary",
     "utils.fps_tracker",
+    "utils.presence_model",
     "utils.manager_report",
     "utils.pilot_report",
     "utils.privacy",
