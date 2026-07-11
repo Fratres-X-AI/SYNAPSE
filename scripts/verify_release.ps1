@@ -19,8 +19,8 @@ function Invoke-Synapse {
     return @{ Output = ($output | Out-String); Code = $code }
 }
 
-$help = Invoke-Synapse -CommandArgs @()
-if ($help.Code -ne 1 -and $help.Output -notmatch "Synapse cognitive monitoring launcher") {
+$help = Invoke-Synapse -CommandArgs @("--help")
+if ($help.Code -ne 0 -or $help.Output -notmatch "Synapse cognitive monitoring launcher") {
     Write-Host "Help output check failed." -ForegroundColor Red
     Write-Host $help.Output
     exit 1
