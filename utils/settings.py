@@ -19,7 +19,8 @@ class UserSettings:
     active_user: str = "default"
 
 
-def load_settings(path: Path = settings_path()) -> UserSettings:
+def load_settings(path: Path | None = None) -> UserSettings:
+    path = path or settings_path()
     ensure_app_dirs()
     if not path.exists():
         return UserSettings()
@@ -28,6 +29,7 @@ def load_settings(path: Path = settings_path()) -> UserSettings:
     return UserSettings(**{**defaults, **data})
 
 
-def save_settings(settings: UserSettings, path: Path = settings_path()) -> None:
+def save_settings(settings: UserSettings, path: Path | None = None) -> None:
+    path = path or settings_path()
     ensure_app_dirs()
     path.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
