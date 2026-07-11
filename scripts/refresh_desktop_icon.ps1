@@ -46,4 +46,4 @@ Start-Process explorer
 
 Write-Host ""
 Write-Host "Done. Check the Synapse icon on your desktop." -ForegroundColor Green
-Write-Host "It should be a dark rounded square with a teal ring." -ForegroundColor DarkGray
+Write-Host "It should be a dark rounded square with an orange-to-purple gradient S." -ForegroundColor DarkGray
