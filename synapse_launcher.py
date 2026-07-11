@@ -80,19 +80,35 @@ def _needs_cli_console(argv: list[str]) -> bool:
 def ensure_cli_console(command: str | None) -> None:
     """Attach a console for frozen windowed builds running CLI subcommands."""
     del command
-    if not is_frozen():
-        return
-    if sys.platform != "win32":
+    if not is_frozen() or sys.platform != "win32":
         return
     try:
         import ctypes
+        import msvcrt
+        import os
 
         kernel32 = ctypes.windll.kernel32
-        attached = kernel32.AttachConsole(ctypes.c_ulong(-1).value)
-        if not attached and not kernel32.GetConsoleWindow():
-            kernel32.AllocConsole()
-        sys.stdout = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
-        sys.stderr = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115
+        ATTACH_PARENT_PROCESS = -1
+        STD_OUTPUT_HANDLE = -11
+        STD_ERROR_HANDLE = -12
+
+        if not kernel32.AttachConsole(ATTACH_PARENT_PROCESS):
+            if not kernel32.GetConsoleWindow():
+                kernel32.AllocConsole()
+
+        def _stream_from_handle(std_handle: int):
+            handle = kernel32.GetStdHandle(std_handle)
+            if handle in (0, -1):
+                return None
+            fd = msvcrt.open_osfhandle(handle, os.O_WRONLY)
+            return open(fd, "w", encoding="utf-8", closefd=False)  # noqa: SIM115
+
+        stdout = _stream_from_handle(STD_OUTPUT_HANDLE)
+        stderr = _stream_from_handle(STD_ERROR_HANDLE)
+        if stdout is not None:
+            sys.stdout = stdout
+        if stderr is not None:
+            sys.stderr = stderr
     except OSError:
         pass
 

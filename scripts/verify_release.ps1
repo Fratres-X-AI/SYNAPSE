@@ -14,9 +14,20 @@ Write-Host "Verifying $exe" -ForegroundColor Cyan
 
 function Invoke-Synapse {
     param([string[]]$CommandArgs)
-    $output = & $exe @CommandArgs 2>&1
+    $tmp = Join-Path $env:TEMP "synapse-smoke-$PID.log"
+    if (Test-Path $tmp) { Remove-Item $tmp -Force }
+    $quoted = $CommandArgs | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '""') + '"' } else { $_ }
+    }
+    $argLine = ($quoted -join ' ')
+    cmd /c "`"$exe`" $argLine > `"$tmp`" 2>&1"
     $code = $LASTEXITCODE
-    return @{ Output = ($output | Out-String); Code = $code }
+    $output = ""
+    if (Test-Path $tmp) {
+        $output = Get-Content $tmp -Raw
+        Remove-Item $tmp -Force
+    }
+    return @{ Output = $output; Code = $code }
 }
 
 $help = Invoke-Synapse -CommandArgs @("--help")
