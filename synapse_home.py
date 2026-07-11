@@ -9,7 +9,11 @@ from pathlib import Path
 from tkinter import font as tkfont
 
 ROOT = Path(__file__).resolve().parent
-ICON_PATH = ROOT / "assets" / "synapse.ico"
+ICON_PATH = (
+    Path(getattr(sys, "_MEIPASS", ROOT)) / "assets" / "synapse.ico"
+    if getattr(sys, "frozen", False)
+    else ROOT / "assets" / "synapse.ico"
+)
 
 
 def _set_window_icon(window: tk.Tk) -> None:
