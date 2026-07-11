@@ -156,6 +156,10 @@ def _overlay_lines(
         lines.append(
             f"Profile: {row.get('profile_phase') or '—'} | Alerts: {row.get('active_alerts') or '—'}"
         )
+        if row.get("presence_labels"):
+            lines.append(f"Presence: {row['presence_labels']}")
+        if row.get("autonomy"):
+            lines.append(f"Autonomy: {float(row['autonomy']):.0%}")
     else:
         lines.append(f"Profile: {row.get('profile_phase') or '—'}")
     lines.append(

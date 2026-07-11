@@ -50,14 +50,11 @@ def test_active_labels_skip_coco_person_on_user():
 def test_presence_frame_active_labels_include_user_and_objects():
     frame = PresenceFrame(
         people=(PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),),
-        objects=(
-            PresenceBox("vape", 0.42, 0.45, 0.5, 0.62, 0.7),
-            PresenceBox("phone", 0.55, 0.55, 0.7, 0.8, 0.8),
-        ),
+        objects=(PresenceBox("phone", 0.55, 0.55, 0.7, 0.8, 0.8),),
         primary_index=0,
     )
 
-    assert frame.active_labels() == {"user", "vape", "phone"}
+    assert frame.active_labels() == {"user", "phone"}
 
 
 def test_presence_tracker_emits_visitor_after_sustain():
@@ -77,6 +74,26 @@ def test_large_background_object_is_not_phone():
     assert not _qualifies_as_phone(jersey_like, [])
 
 
+def test_background_clutter_is_not_person():
+    from src.perception.presence_detector import (
+        _looks_like_background_clutter,
+        _qualifies_as_coco_person,
+        _qualifies_as_extra_person_face,
+    )
+
+    user = PresenceBox("user", 0.30, 0.18, 0.62, 0.82, 0.92, is_primary=True)
+    backpack = PresenceBox("person", 0.58, 0.12, 0.92, 0.72, 0.55)
+    jersey = PresenceBox("person", 0.05, 0.18, 0.42, 0.78, 0.51)
+    visitor = PresenceBox("person", 0.62, 0.22, 0.82, 0.58, 0.78)
+
+    assert _looks_like_background_clutter(backpack)
+    assert _looks_like_background_clutter(jersey)
+    assert not _qualifies_as_coco_person(backpack, user)
+    assert not _qualifies_as_coco_person(jersey, user)
+    assert not _qualifies_as_extra_person_face(backpack, user)
+    assert _qualifies_as_extra_person_face(visitor, user)
+
+
 def test_small_phone_in_hand_qualifies():
     from src.perception.presence_detector import _qualifies_as_phone
 
@@ -86,45 +103,82 @@ def test_small_phone_in_hand_qualifies():
     assert _qualifies_as_phone(phone, [hand])
 
 
+def test_phone_near_hand_without_overlap_qualifies():
+    from src.perception.presence_detector import _qualifies_as_phone
+
+    phone = PresenceBox("phone", 0.50, 0.38, 0.58, 0.62, 0.45)
+    hand = PresenceBox("hand", 0.42, 0.44, 0.54, 0.70, 0.7)
+
+    assert _qualifies_as_phone(phone, [hand])
+
+
+def test_handheld_near_hand_becomes_phone():
+    from src.perception.presence_detector import _classify_handheld
+
+    box = PresenceBox("handheld", 0.46, 0.40, 0.54, 0.64, 0.55)
+    hand = PresenceBox("hand", 0.42, 0.38, 0.58, 0.68, 0.7)
+
+    assert _classify_handheld(box, mouth=None, hands=[hand]) == "phone"
+
+
+def test_carrot_and_unknown_coco_labels_are_discarded():
+    assert normalize_object_label("carrot") == ""
+    assert normalize_object_label("cell phone") == "phone"
+    assert normalize_object_label("parking meter") == ""
+
+
+def test_filter_allowed_objects_drops_food_and_desk():
+    from src.perception.presence_detector import _filter_allowed_objects
+
+    objects = [
+        PresenceBox("phone", 0.4, 0.5, 0.55, 0.75, 0.8),
+        PresenceBox("carrot", 0.1, 0.1, 0.2, 0.2, 0.6),
+        PresenceBox("food", 0.2, 0.2, 0.3, 0.3, 0.6),
+    ]
+    kept = _filter_allowed_objects(objects)
+    assert {obj.label for obj in kept} == {"phone"}
+
+
 def test_normalize_object_label_maps_phone_and_toothbrush():
     assert normalize_object_label("cell phone") == "phone"
     assert normalize_object_label("toothbrush") == "handheld"
 
 
-def test_thin_handheld_on_desk_becomes_pen_not_vape():
+def test_thin_handheld_on_desk_is_discarded():
     from src.perception.presence_detector import _classify_handheld
 
     box = PresenceBox("handheld", 0.45, 0.62, 0.52, 0.82, 0.7)
-    assert _classify_handheld(box, mouth=(0.5, 0.4)) == "pen"
+    assert _classify_handheld(box, mouth=(0.5, 0.4)) == "desk"
 
 
-def test_square_pod_near_mouth_is_vape():
-    from src.perception.presence_detector import _classify_handheld, _looks_like_vape
-
-    box = PresenceBox("handheld", 0.46, 0.44, 0.56, 0.58, 0.7)
-    assert _looks_like_vape(box)
-    assert _classify_handheld(box, mouth=(0.5, 0.5)) == "vape"
-
-
-def test_thin_object_near_mouth_stays_pen():
+def test_blocky_handheld_at_mouth_is_not_phone():
     from src.perception.presence_detector import _classify_handheld
 
     box = PresenceBox("handheld", 0.47, 0.42, 0.53, 0.72, 0.7)
-    assert _classify_handheld(box, mouth=(0.5, 0.5)) == "pen"
+    assert _classify_handheld(box, mouth=(0.5, 0.5)) != "phone"
+
+
+def test_square_pod_near_mouth_is_not_phone():
+    from src.perception.presence_detector import _classify_handheld
+
+    box = PresenceBox("handheld", 0.46, 0.44, 0.56, 0.58, 0.7)
+    mouth_hand = PresenceBox("hand", 0.44, 0.42, 0.58, 0.62, 0.7)
+    assert _classify_handheld(box, mouth=(0.5, 0.5), hands=[mouth_hand]) == ""
 
 
 def test_presence_frame_active_labels_include_events():
     frame = PresenceFrame(
         people=(PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),),
-        objects=(PresenceBox("pen", 0.47, 0.48, 0.53, 0.62, 0.7),),
+        objects=(),
         events=("smoking",),
         primary_index=0,
+        detected_hands=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),),
     )
 
-    assert frame.active_labels() == {"user", "pen", "smoking"}
+    assert frame.active_labels() == {"user", "smoking"}
 
 
-def test_smoking_tracker_logs_when_vapor_and_pen_at_mouth():
+def test_smoking_tracker_logs_when_hand_at_mouth():
     from types import SimpleNamespace
 
     import numpy as np
@@ -137,7 +191,9 @@ def test_smoking_tracker_logs_when_vapor_and_pen_at_mouth():
         landmarks[index] = SimpleNamespace(x=0.5, y=0.55, z=0.0)
 
     frame = np.full((480, 640, 3), 40, dtype=np.uint8)
-    presence = PresenceFrame(objects=(PresenceBox("pen", 0.47, 0.48, 0.53, 0.62, 0.7),))
+    presence = PresenceFrame(
+        detected_hands=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),),
+    )
     tracker = SmokingEventTracker(sustain_seconds=0.0, vapor_boost=8.0, cooldown_seconds=0.0)
     shoulders = ShoulderSample(visible=True, center_y=0.58, lift=0.02, elevated=True)
 
@@ -162,7 +218,9 @@ def test_smoking_tracker_fires_on_vapor_with_hand_at_mouth():
         landmarks[index] = SimpleNamespace(x=0.5, y=0.55, z=0.0)
 
     frame = np.full((480, 640, 3), 40, dtype=np.uint8)
-    presence = PresenceFrame(objects=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),))
+    presence = PresenceFrame(
+        detected_hands=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),),
+    )
     tracker = SmokingEventTracker(sustain_seconds=0.0, vapor_boost=8.0, cooldown_seconds=0.0)
     shoulders = ShoulderSample(visible=True, center_y=0.58, lift=0.02, elevated=True)
 
@@ -200,10 +258,164 @@ def test_smoking_tracker_detects_blown_exhale_without_hand():
     assert tracker.update(presence, bright, landmarks, 0.5) == ("smoking",)
 
 
+def test_smoking_tracker_suppressed_when_phone_present():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from src.perception.presence_detector import SmokingEventTracker, _MOUTH_INDICES
+    from src.perception.shoulder_tracker import ShoulderSample
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    for index in _MOUTH_INDICES:
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.55, z=0.0)
+
+    frame = np.full((480, 640, 3), 40, dtype=np.uint8)
+    bright = frame.copy()
+    bright[180:240, 260:380] = 250
+    presence = PresenceFrame(
+        objects=(
+            PresenceBox("phone", 0.44, 0.46, 0.56, 0.72, 0.7),
+        ),
+        detected_hands=(PresenceBox("hand", 0.42, 0.44, 0.58, 0.74, 0.7),),
+    )
+    tracker = SmokingEventTracker(sustain_seconds=0.0, vapor_boost=8.0, cooldown_seconds=0.0)
+    shoulders = ShoulderSample(visible=True, center_y=0.58, lift=0.02, elevated=True)
+
+    assert tracker.update(presence, bright, landmarks, 0.6, shoulder=shoulders) == ()
+
+
+def test_phone_use_posture_infers_phone_not_pen():
+    from src.perception.presence_detector import _infer_phone_from_use_posture, _phone_use_posture
+
+    hand = PresenceBox("hand", 0.40, 0.48, 0.58, 0.78, 0.7)
+    assert _phone_use_posture(hand, (0.5, 0.42))
+    inferred = _infer_phone_from_use_posture([hand], None)
+    assert inferred is None
+
+
+def test_apply_phone_gaze_split_keeps_phone_when_mouth_hand_on_screen():
+    from types import SimpleNamespace
+
+    from src.perception.presence_detector import _apply_phone_gaze_split
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    landmarks[1] = SimpleNamespace(x=0.5, y=0.36, z=0.0)
+    for index in (13, 14, 78, 308):
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.52, z=0.0)
+    for indices, iris_index, iris_dx, iris_dy in (
+        ((33, 160, 158, 133, 153, 144), 468, 0.004, 0.018),
+        ((362, 385, 387, 263, 373, 380), 473, 0.004, 0.018),
+    ):
+        outer, top_a, top_b, inner, bottom_a, bottom_b = indices
+        landmarks[outer] = SimpleNamespace(x=0.42, y=0.34, z=0.0)
+        landmarks[inner] = SimpleNamespace(x=0.58, y=0.34, z=0.0)
+        landmarks[top_a] = SimpleNamespace(x=0.48, y=0.31, z=0.0)
+        landmarks[top_b] = SimpleNamespace(x=0.52, y=0.31, z=0.0)
+        landmarks[bottom_a] = SimpleNamespace(x=0.48, y=0.37, z=0.0)
+        landmarks[bottom_b] = SimpleNamespace(x=0.52, y=0.37, z=0.0)
+        landmarks[iris_index] = SimpleNamespace(x=0.5 + iris_dx, y=0.34 + iris_dy, z=0.0)
+
+    phone = PresenceBox("phone", 0.44, 0.50, 0.56, 0.74, 0.82)
+    phone_hand = PresenceBox("hand", 0.42, 0.48, 0.58, 0.76, 0.7)
+    mouth_hand = PresenceBox("hand", 0.62, 0.56, 0.72, 0.74, 0.7)
+    objects = [phone]
+    kept = _apply_phone_gaze_split(objects, [phone_hand, mouth_hand], landmarks)
+    phone_boxes = [obj for obj in kept if obj.label == "phone"]
+    assert len(phone_boxes) == 1
+    assert phone_boxes[0].center[0] < 0.55
+
+
+def test_portrait_phone_stays_phone():
+    from src.perception.presence_detector import _refine_object_labels
+
+    phone = PresenceBox("phone", 0.43, 0.59, 0.61, 0.99, 0.58)
+    refined = _refine_object_labels([phone], [], None, None)
+    assert len(refined) == 1
+    assert refined[0].label == "phone"
+
+
+def test_device_slab_on_hand_from_capture_profile():
+    from src.perception.presence_detector import _device_slab_on_hand
+
+    hand = PresenceBox("hand", 0.42, 0.55, 0.58, 0.78, 0.7)
+    phone_slab = PresenceBox("phone", 0.44, 0.56, 0.52, 0.72, 0.50)
+    bare_hand_blob = PresenceBox("phone", 0.41, 0.54, 0.59, 0.79, 0.74)
+
+    assert _device_slab_on_hand(phone_slab, hand)
+    assert not _device_slab_on_hand(bare_hand_blob, hand)
+
+
+def test_stick_phone_label_drops_hand_sized_phone():
+    from src.perception.presence_detector import PresenceDetector
+
+    detector = PresenceDetector(enable_objects=False, enable_hands=False)
+    hand = PresenceBox("hand", 0.42, 0.55, 0.58, 0.78, 0.7)
+    false_phone = PresenceBox("phone", 0.41, 0.54, 0.59, 0.79, 0.74)
+
+    kept = detector._stick_phone_label([false_phone], [hand])
+    assert [obj.label for obj in kept] == []
+    detector.close()
+
+
+def test_bare_hand_not_labeled_as_phone():
+    from src.perception.presence_detector import _drop_hand_shaped_phones
+
+    hand = PresenceBox("hand", 0.42, 0.55, 0.58, 0.78, 0.7)
+    hand_as_phone = PresenceBox("phone", 0.41, 0.54, 0.59, 0.79, 0.62)
+    real_phone = PresenceBox("phone", 0.44, 0.52, 0.52, 0.70, 0.72)
+
+    kept = _drop_hand_shaped_phones([hand_as_phone, real_phone], [hand])
+    assert len(kept) == 1
+    assert kept[0].center[0] < 0.52
+
+
 def test_display_label_formats_for_log():
     assert display_label("user") == "User"
-    assert display_label("vape") == "Vape"
+    assert display_label("phone") == "Phone"
     assert display_label("smoking") == "Smoking"
+
+
+def test_coco_phone_at_mouth_is_dropped_not_phone():
+    from types import SimpleNamespace
+
+    from src.perception.presence_detector import _MOUTH_INDICES, _refine_object_labels
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    for index in _MOUTH_INDICES:
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.5, z=0.0)
+
+    pod = PresenceBox("phone", 0.46, 0.44, 0.56, 0.58, 0.72)
+    mouth_hand = PresenceBox("hand", 0.44, 0.42, 0.58, 0.62, 0.7)
+    refined = _refine_object_labels([pod], [mouth_hand], landmarks, None)
+    assert refined == []
+
+
+def test_smoking_tracker_fires_with_phone_and_vapor():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from src.perception.presence_detector import SmokingEventTracker, _MOUTH_INDICES
+    from src.perception.shoulder_tracker import ShoulderSample
+
+    landmarks = [SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+    for index in _MOUTH_INDICES:
+        landmarks[index] = SimpleNamespace(x=0.5, y=0.55, z=0.0)
+
+    frame = np.full((480, 640, 3), 40, dtype=np.uint8)
+    bright = frame.copy()
+    bright[180:240, 260:380] = 250
+    presence = PresenceFrame(
+        objects=(PresenceBox("phone", 0.44, 0.50, 0.56, 0.74, 0.7),),
+        detected_hands=(PresenceBox("hand", 0.47, 0.48, 0.53, 0.62, 0.7),),
+    )
+    tracker = SmokingEventTracker(sustain_seconds=0.0, vapor_boost=8.0, cooldown_seconds=0.0)
+    shoulders = ShoulderSample(visible=True, center_y=0.58, lift=0.02, elevated=True)
+
+    assert tracker.update(presence, frame, landmarks, 0.0, shoulder=shoulders) == ()
+    assert tracker.update(presence, bright, landmarks, 0.5, shoulder=shoulders) == ()
+    assert tracker.update(presence, bright, landmarks, 0.6, shoulder=shoulders) == ("smoking",)
 
 
 def test_presence_event_logger_writes_timestamped_line(tmp_path: Path):
@@ -211,7 +423,7 @@ def test_presence_event_logger_writes_timestamped_line(tmp_path: Path):
     logger = PresenceEventLogger(log_path, sustain_seconds=0.0)
     when = datetime(2026, 7, 11, 7, 17, 0)
 
-    lines = logger.update({"user", "vape"}, when=when)
+    lines = logger.update({"user", "phone"}, when=when)
 
-    assert lines == ["7:17 AM | User | Vape"]
-    assert log_path.read_text(encoding="utf-8").strip().endswith("7:17 AM | User | Vape")
+    assert lines == ["7:17 AM | Phone | User"]
+    assert log_path.read_text(encoding="utf-8").strip().endswith("7:17 AM | Phone | User")

@@ -20,6 +20,8 @@ class CameraCapture:
                 f"Could not open webcam index {camera_index}. "
                 "Check camera permissions or choose another camera in settings."
             )
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             max_num_faces=1,
@@ -33,6 +35,10 @@ class CameraCapture:
         self._shoulder_tracker = ShoulderTracker() if detect_presence else None
         self.last_shoulder_sample: ShoulderSample | None = None
         self.last_pose_landmarks = None
+        self._presence_stride = 1
+        self._pose_stride = 3
+        self._frame_index = 0
+        self._cached_presence: PresenceFrame | None = None
         if detect_presence:
             self._pose = mp.solutions.pose.Pose(
                 static_image_mode=False,
@@ -66,6 +72,7 @@ class CameraCapture:
             return None, None, None
 
         self.failed_reads = 0
+        self._frame_index += 1
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.face_mesh.process(rgb_frame)
 
@@ -73,30 +80,38 @@ class CameraCapture:
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0].landmark
 
-        pose_landmarks = None
-        if self._pose is not None:
+        run_pose = self._pose is not None and self._frame_index % self._pose_stride == 0
+        pose_landmarks = self.last_pose_landmarks
+        if run_pose:
             pose_results = self._pose.process(rgb_frame)
             if pose_results.pose_landmarks:
                 pose_landmarks = pose_results.pose_landmarks.landmark
-        self.last_pose_landmarks = pose_landmarks
-        shoulder = None
-        if self._shoulder_tracker is not None:
+            else:
+                pose_landmarks = None
+            self.last_pose_landmarks = pose_landmarks
+
+        shoulder = self.last_shoulder_sample
+        if self._shoulder_tracker is not None and run_pose:
             shoulder = self._shoulder_tracker.update(pose_landmarks)
             self.last_shoulder_sample = shoulder
 
-        presence = None
-        if self._presence_detector is not None:
+        presence = self._cached_presence
+        run_presence = self._presence_detector is not None and self._frame_index % self._presence_stride == 0
+        if run_presence:
             presence = self._presence_detector.detect(rgb_frame, landmarks)
-            if self._smoking_tracker is not None and presence is not None:
-                events = self._smoking_tracker.update(
-                    presence,
-                    rgb_frame,
-                    landmarks,
-                    time.monotonic(),
-                    shoulder=shoulder,
-                )
-                if events:
-                    presence = replace(presence, events=events)
+            self._cached_presence = presence
+
+        if self._smoking_tracker is not None and presence is not None:
+            events = self._smoking_tracker.update(
+                presence,
+                rgb_frame,
+                landmarks,
+                time.monotonic(),
+                shoulder=shoulder,
+            )
+            if events:
+                presence = replace(presence, events=events)
+                self._cached_presence = presence
 
         return frame, landmarks, presence
 

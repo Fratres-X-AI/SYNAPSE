@@ -14,11 +14,23 @@ from src.monitoring.alert_rules import MonitorAlertEngine
 from src.monitoring.presence_logger import PresenceEventLogger
 from src.perception.capture import CameraCapture
 from src.perception.emotion_estimator import EmotionEstimator
+from src.perception.frame_quality import assess_frame_quality, draw_quality_pill
 from src.perception.presence_detector import PresenceTracker, display_label
+from src.perception.shoulder_tracker import draw_shoulder_markers
 from src.perception.state_estimator import StateEstimator
 from src.visualization.alerts import StateAlertTracker
-from src.visualization.dashboard import render_fusion_dashboard
+from src.visualization.dashboard import draw_profile_match_bars, render_fusion_dashboard
+from src.visualization.debrief import run_session_debrief
 from src.visualization.display_adapter import create_display_adapter
+from src.visualization.landmark_overlay import draw_all_tracking_overlays
+from src.visualization.monitor_hud import (
+    RuleBannerTracker,
+    VisitorBannerTracker,
+    build_monitor_subtitle,
+    compose_monitor_banner,
+)
+from src.visualization.presence_overlay import draw_presence_overlay
+from src.visualization.timeline import draw_live_session_strip
 from utils.config import Config
 from utils.app_paths import cleanup_old_data
 from utils.emotion_profile import EmotionProfile, load_emotion_profile
@@ -33,6 +45,8 @@ SUMMARY_EVERY_SECONDS = 30
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Synapse production monitor")
     parser.add_argument("--fullscreen", action="store_true", help="Start fullscreen (F to toggle)")
+    parser.add_argument("--skip-debrief", action="store_true", help="Close without post-session debrief")
+    parser.add_argument("--debrief", action="store_true", help="Show post-session debrief on exit")
     return parser.parse_args()
 
 
@@ -78,6 +92,10 @@ def main() -> None:
     fps_tracker = FpsTracker()
     presence_tracker = PresenceTracker()
     presence_event_logger = PresenceEventLogger(presence_log_path)
+    visitor_banner = VisitorBannerTracker()
+    rule_banner = RuleBannerTracker()
+    live_rows: deque[dict] = deque(maxlen=240)
+    show_landmarks = False
     started_at = monotonic()
     last_summary_at = started_at
 
@@ -89,7 +107,7 @@ def main() -> None:
     else:
         print("No profile - run: python synapse_launcher.py onboard")
     print("Alert rules: low engagement 2m | high distraction 2m | fatigue 1m | tension 90s")
-    print("Act naturally. Press 'q' to stop, 'f' for fullscreen.")
+    print("Act naturally. Press 'q' to stop, 'f' for fullscreen, 'm' for landmark shell.")
 
     with log_path.open("w", newline="", encoding="utf-8") as log_file, alert_log_path.open(
         "w", newline="", encoding="utf-8"
@@ -146,6 +164,8 @@ def main() -> None:
                 face_count = 0
                 extra_people = 0
                 presence_labels = ""
+                new_rule_messages: list[str] = []
+                face_detected = landmarks is not None
                 if presence is not None:
                     face_count = presence.face_count
                     extra_people = presence.extra_people
@@ -207,10 +227,19 @@ def main() -> None:
                     )
                     for alert in new_alerts:
                         print(f"[ALERT] {alert.message} at {alert.elapsed_sec:.0f}s")
+                        new_rule_messages.append(alert.message)
                         alert_writer.writerow(
                             [alert.timestamp_iso, f"{alert.elapsed_sec:.2f}", alert.rule_id, alert.message]
                         )
                         alert_file.flush()
+
+                    live_rows.append(
+                        {
+                            "state": cognitive.state.value,
+                            "profile_phase": profile_phase or "",
+                            "engagement": f"{soft.engagement:.3f}",
+                        }
+                    )
 
                     cog = cognitive.signals
                     writer.writerow(
@@ -248,8 +277,26 @@ def main() -> None:
                     )
                     log_file.flush()
 
-                flash, _ = alerts.update(
+                flash, _state_alert_message = alerts.update(
                     fusion.cognitive.state if fusion else None,
+                    agent.autonomy_level if fusion else None,
+                )
+                draw_presence_overlay(frame, presence)
+                draw_shoulder_markers(frame, camera.last_pose_landmarks, camera.last_shoulder_sample)
+                if show_landmarks and landmarks is not None:
+                    draw_all_tracking_overlays(frame, landmarks)
+                banner = compose_monitor_banner(
+                    active_alerts=active_alerts,
+                    presence_event=presence_event,
+                    state_message="",
+                    visitor_tracker=visitor_banner,
+                    rule_tracker=rule_banner,
+                    new_rule_messages=new_rule_messages,
+                )
+                subtitle = build_monitor_subtitle(
+                    presence,
+                    camera.last_shoulder_sample,
+                    fusion,
                     agent.autonomy_level if fusion else None,
                 )
                 frame = render_fusion_dashboard(
@@ -258,8 +305,23 @@ def main() -> None:
                     ear_history,
                     estimator,
                     flash=flash,
+                    alert_message=banner,
+                    subtitle=subtitle,
                     fps=fps_tracker.tick(),
                 )
+                quality_message, quality_color = assess_frame_quality(frame, face_detected=face_detected)
+                if fusion is not None:
+                    height, width = frame.shape[:2]
+                    draw_profile_match_bars(frame, fusion, (width - 168, 42))
+                    if len(live_rows) > 3:
+                        draw_live_session_strip(
+                            frame,
+                            list(live_rows),
+                            (16, height - 22),
+                            (min(220, width - 32), 14),
+                            mode="profile",
+                        )
+                draw_quality_pill(frame, quality_message, quality_color)
                 if landmarks is None:
                     cv2.putText(
                         frame,
@@ -283,7 +345,11 @@ def main() -> None:
                     )
                     last_summary_at = now
 
-                if display.poll_quit():
+                key = display.read_key(1)
+                if key in (ord("m"), ord("M")):
+                    show_landmarks = not show_landmarks
+                    print(f"Landmark shell {'ON' if show_landmarks else 'OFF'}")
+                elif display.try_handle_display_key(key):
                     break
         finally:
             camera.release()
@@ -301,6 +367,12 @@ def main() -> None:
                 print(f"\nReport saved to {log_path.with_suffix('.report.txt')}")
                 if settings.export_reports_to_desktop:
                     print("Copy exported to Desktop: Synapse_Report_*.txt")
+            if args.debrief and not args.skip_debrief and log_path.stat().st_size > 120:
+                run_session_debrief(
+                    log_path,
+                    alert_csv=alert_log_path,
+                    presence_log=presence_log_path,
+                )
 
 
 if __name__ == "__main__":

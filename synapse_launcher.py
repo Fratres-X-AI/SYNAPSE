@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", ROOT))
 
 SCRIPTS = {
+    "home": "synapse_home.py",
     "onboard": "synapse_onboard.py",
     "monitor": "synapse_monitor.py",
     "replay": "replay_monitor.py",
@@ -24,6 +25,7 @@ SCRIPTS = {
     "pilot-summary": "synapse_pilot_summary.py",
 }
 SCRIPT_MODULES = {
+    "synapse_home.py": "synapse_home",
     "synapse_onboard.py": "test_onboard",
     "synapse_monitor.py": "test_monitor",
     "replay_monitor.py": "replay_monitor",
@@ -65,6 +67,7 @@ DESCRIPTION = """\
 Synapse cognitive monitoring launcher.
 
 Commands:
+  home      Open graphical launcher shell
   first-run Run privacy notice, onboarding, then first monitor session
   onboard   Run unified onboarding wizard (calibration + emotion profile)
   monitor   Start production monitor mode
@@ -77,6 +80,8 @@ Commands:
   delete-data Delete local Synapse user data
 
 Examples:
+  python synapse_launcher.py
+  python synapse_launcher.py home
   python synapse_launcher.py first-run
   python synapse_launcher.py onboard
   python synapse_launcher.py monitor
@@ -237,6 +242,7 @@ def run_tray() -> int:
         return _action
 
     menu = pystray.Menu(
+        pystray.MenuItem("Home", launch("home")),
         pystray.MenuItem("First Run", launch("first-run")),
         pystray.MenuItem("Onboard", launch("onboard")),
         pystray.MenuItem("Monitor", launch("monitor")),
@@ -296,9 +302,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.tray:
         tray_thread = threading.Thread(target=run_tray, daemon=True)
         tray_thread.start()
+        tray_thread.join()
+        return 0
 
-    parser.print_help()
-    return 0 if args.tray else 1
+    return run_command("home", command_argv("home", extra, args.fullscreen))
 
 
 if __name__ == "__main__":

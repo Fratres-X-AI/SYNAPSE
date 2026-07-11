@@ -3,7 +3,7 @@ from pathlib import Path
 
 import cv2
 
-from src.visualization.hud_text import HUD_ACCENT, HUD_DIM, draw_hud_text
+from src.visualization.hud_text import HUD_ACCENT, HUD_DIM, HUD_LABEL, draw_hud_text
 
 STATE_COLORS = {
     "high_attention": (62, 128, 52),
@@ -100,6 +100,34 @@ def draw_timeline_bar(
         2,
         cv2.LINE_AA,
     )
+    return frame
+
+
+def draw_live_session_strip(
+    frame,
+    rows: list[dict],
+    origin: tuple[int, int],
+    size: tuple[int, int],
+    mode: str = "profile",
+):
+    if len(rows) < 2:
+        return frame
+    x, y = origin
+    width, height = size
+    draw_hud_text(frame, "LIVE", (x, y), size=9, color=HUD_LABEL, label=True)
+    bar_top = y + 12
+    bar_bottom = y + height - 2
+    bar_left = x + 40
+    bar_right = x + width
+    bar_width = max(bar_right - bar_left, 1)
+    total = len(rows)
+    for index, row in enumerate(rows):
+        x1 = bar_left + int(index * bar_width / total)
+        x2 = bar_left + int((index + 1) * bar_width / total)
+        color = _segment_color(row, mode)
+        cv2.rectangle(frame, (x1, bar_top), (max(x2, x1 + 1), bar_bottom), color, -1)
+    cursor_x = bar_right - 1
+    cv2.line(frame, (cursor_x, bar_top - 1), (cursor_x, bar_bottom + 1), HUD_ACCENT, 2, cv2.LINE_AA)
     return frame
 
 

@@ -29,7 +29,7 @@ def test_draw_presence_overlay_skips_user_and_hand_boxes():
             PresenceBox("person", 0.55, 0.2, 0.8, 0.6, 0.8),
         ),
         objects=(
-            PresenceBox("vape", 0.42, 0.45, 0.5, 0.62, 0.7),
+            PresenceBox("phone", 0.42, 0.45, 0.5, 0.62, 0.7),
             PresenceBox("hand", 0.30, 0.50, 0.40, 0.65, 0.7),
         ),
         primary_index=0,
@@ -43,7 +43,7 @@ def test_draw_presence_overlay_skips_user_and_hand_boxes():
     assert result[200, 200].sum() == 0
     assert result[220, 210].sum() == 0
     assert result[276, 224].sum() == 0
-    # Real visitor and vape boxes are still drawn.
+    # Real visitor and phone boxes are still drawn.
     assert result[96, 384].sum() != 0
     assert result[216, 288].sum() != 0
 
@@ -54,7 +54,7 @@ def test_presence_hud_note_lists_identified_labels():
             PresenceBox("user", 0.2, 0.2, 0.5, 0.7, 0.9, is_primary=True),
             PresenceBox("person", 0.55, 0.2, 0.8, 0.6, 0.8),
         ),
-        objects=(PresenceBox("vape", 0.42, 0.45, 0.5, 0.62, 0.7),),
+        objects=(PresenceBox("phone", 0.42, 0.45, 0.5, 0.62, 0.7),),
         primary_index=0,
     )
 
@@ -62,4 +62,4 @@ def test_presence_hud_note_lists_identified_labels():
 
     assert "User" in note
     assert "Person" in note
-    assert "Vape" in note
+    assert "Phone" in note

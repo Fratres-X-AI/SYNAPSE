@@ -10,13 +10,12 @@ from src.perception.presence_detector import PresenceBox, PresenceFrame, display
 USER_COLOR = (120, 245, 255)
 PERSON_COLOR = (72, 196, 255)
 PHONE_COLOR = (255, 210, 72)
-VAPE_COLOR = (96, 96, 255)
 FOOD_COLOR = (96, 210, 140)
 DRINK_COLOR = (255, 170, 96)
-PEN_COLOR = (210, 180, 255)
 GLASSES_COLOR = (180, 220, 255)
 HAND_COLOR = (255, 196, 72)
 OBJECT_COLOR = (188, 210, 228)
+SMOKING_COLOR = (96, 96, 255)
 
 _HIDDEN_BOX_LABELS = frozenset({"user", "hand"})
 
@@ -70,16 +69,14 @@ def _color_for_label(label: str) -> tuple[int, int, int]:
         "user": USER_COLOR,
         "person": PERSON_COLOR,
         "phone": PHONE_COLOR,
-        "vape": VAPE_COLOR,
+        "smoking": SMOKING_COLOR,
         "food": FOOD_COLOR,
         "drink": DRINK_COLOR,
-        "pen": PEN_COLOR,
         "glasses": GLASSES_COLOR,
         "hand": HAND_COLOR,
         "laptop": OBJECT_COLOR,
         "book": OBJECT_COLOR,
         "desk": OBJECT_COLOR,
-        "scissors": PEN_COLOR,
     }.get(label.lower(), OBJECT_COLOR)
 
 

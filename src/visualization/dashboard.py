@@ -69,6 +69,49 @@ def draw_soft_score_bars(frame, fusion: FusionState, origin: tuple[int, int]):
 
 
 def draw_profile_match_bars(frame, fusion: FusionState, origin: tuple[int, int]):
+    from src.visualization.hud_text import HUD_DIM, HUD_LABEL, draw_hud_text
+    from src.visualization.timeline import PROFILE_COLORS
+
+    x, y = origin
+    width = 148
+    draw_hud_text(frame, "MATCH", (x, y), size=10, color=HUD_LABEL, label=True)
+    bar_top = y + 14
+    bar_height = 10
+    labels = ("N", "H", "S", "M")
+    keys = ("neutral", "happy", "sad", "mad")
+    slot_w = (width - 8) // len(labels)
+    active = (fusion.profile_phase or "").lower()
+    for index, (label, key) in enumerate(zip(labels, keys)):
+        score = float(fusion.profile_scores.get(key, 0.0))
+        slot_x = x + index * slot_w
+        cv2.rectangle(
+            frame,
+            (slot_x, bar_top),
+            (slot_x + slot_w - 4, bar_top + bar_height),
+            HUD_DIM,
+            1,
+            cv2.LINE_AA,
+        )
+        fill_w = max(1, int((slot_w - 6) * max(0.0, min(1.0, score))))
+        color = PROFILE_COLORS.get(key, (170, 165, 158))
+        cv2.rectangle(
+            frame,
+            (slot_x + 1, bar_top + 1),
+            (slot_x + 1 + fill_w, bar_top + bar_height - 1),
+            color,
+            -1,
+            cv2.LINE_AA,
+        )
+        if active.startswith(key):
+            cv2.rectangle(
+                frame,
+                (slot_x, bar_top - 2),
+                (slot_x + slot_w - 4, bar_top + bar_height + 2),
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+        draw_hud_text(frame, label, (slot_x + 2, bar_top + bar_height + 4), size=9, color=HUD_LABEL)
     return frame
 
 
